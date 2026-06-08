@@ -132,7 +132,7 @@ public class StudyController {
             };
             broadcast(roomId, response);
         } catch (IllegalArgumentException | IllegalStateException e) {
-            broadcastError(roomId, e.getMessage());
+            broadcastError(roomId, room, e.getMessage());
         }
     }
 
@@ -168,5 +168,11 @@ public class StudyController {
         msg.convertAndSend("/topic/study/" + roomId,
                 StudyStateResponse.builder().roomId(roomId)
                         .message("ERROR: " + text).currentTurn(-1).winner(-1).build());
+    }
+
+    private void broadcastError(String roomId, Room room, String text) {
+        StudyStateResponse state = buildInitialState(room);
+        state.setMessage("ERROR: " + text);
+        msg.convertAndSend("/topic/study/" + roomId, state);
     }
 }
