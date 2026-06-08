@@ -1,4 +1,4 @@
-﻿package com.studyplatform.model.baseball;
+package com.studyplatform.model.baseball;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;

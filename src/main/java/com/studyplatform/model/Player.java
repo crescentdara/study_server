@@ -1,4 +1,4 @@
-﻿package com.studyplatform.model;
+package com.studyplatform.model;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
