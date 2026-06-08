@@ -1,4 +1,4 @@
-﻿package com.studyplatform.dto.request;
+package com.studyplatform.dto.request;
 
 import lombok.Data;
 

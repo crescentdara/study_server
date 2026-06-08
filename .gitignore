@@ -1,0 +1,14 @@
+# Build output
+target/
+
+# Properties
+src/main/resources/application.properties
+src/main/resources/application-*.properties
+
+# IDE
+.idea/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
