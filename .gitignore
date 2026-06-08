@@ -1,0 +1,21 @@
+# Maven 빌드 산출물 (컴파일된 .class 파일, JAR 등)
+target/
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+
+# Eclipse
+.classpath
+.project
+.settings/
+bin/
+
+# Spring Boot 로그
+*.log
+logs/
+
+# 환경 설정 파일 (비밀번호 등 민감 정보)
+application-local.properties
+application-secret.properties
