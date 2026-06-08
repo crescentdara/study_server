@@ -1,4 +1,4 @@
-﻿package com.studyplatform.model;
+package com.studyplatform.model;
 
 /**
  * 게임 종류를 나타내는 열거형(Enum)

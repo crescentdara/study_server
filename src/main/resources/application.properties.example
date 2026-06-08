@@ -1,0 +1,12 @@
+# 서버 포트
+server.port=9090
+
+# 로그 레벨 (개발: DEBUG, 운영: INFO)
+logging.level.com.studyplatform=DEBUG
+logging.level.org.springframework.web.socket=INFO
+
+# HTTP 세션 타임아웃
+server.servlet.session.timeout=30m
+
+# JSON 직렬화: null 값 제외
+spring.jackson.default-property-inclusion=non_null
