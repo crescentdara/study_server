@@ -3,6 +3,7 @@ package com.studyplatform.service;
 import com.studyplatform.model.*;
 import com.studyplatform.model.baseball.BaseballGame;
 import com.studyplatform.model.bingo.BingoGame;
+import com.studyplatform.model.omok.OmokGame;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -41,9 +42,9 @@ public class RoomService {
                            String nickname, String sessionId,
                            int maxPlayers, int digits, int boardSize) {
         Room room = new Room(roomName, studyType);
-        room.setMaxPlayers(Math.max(2, Math.min(6, maxPlayers)));
+        room.setMaxPlayers(studyType == StudyType.OMOK ? 2 : Math.max(2, Math.min(6, maxPlayers)));
         room.setDigits(digits);
-        room.setBoardSize(boardSize);
+        room.setBoardSize(studyType == StudyType.OMOK ? 19 : boardSize);
         room.getPlayers().add(new Player(sessionId, nickname, 0));
         rooms.put(room.getRoomId(), room);
         return room;
@@ -80,7 +81,7 @@ public class RoomService {
             throw new RuntimeException("Game already started.");
 
         initGameData(room);
-        room.setStatus(StudyStatus.SETUP);
+        room.setStatus(room.getStudyType() == StudyType.OMOK ? StudyStatus.PLAYING : StudyStatus.SETUP);
     }
 
     /**
@@ -94,7 +95,7 @@ public class RoomService {
             throw new RuntimeException("Game is not finished yet.");
 
         initGameData(room);         // 새 게임 데이터 생성
-        room.setStatus(StudyStatus.SETUP); // FINISHED → SETUP 으로 리셋
+        room.setStatus(room.getStudyType() == StudyType.OMOK ? StudyStatus.PLAYING : StudyStatus.SETUP);
     }
 
     /** 게임 타입에 맞는 게임 데이터 객체 생성 */
@@ -103,6 +104,7 @@ public class RoomService {
         switch (room.getStudyType()) {
             case BASEBALL -> room.setGameData(new BaseballGame(room.getDigits(), n));
             case BINGO    -> room.setGameData(new BingoGame(room.getBoardSize(), n));
+            case OMOK     -> room.setGameData(new OmokGame(room.getBoardSize(), n));
         }
     }
 

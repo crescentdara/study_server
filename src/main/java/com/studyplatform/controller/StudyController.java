@@ -6,6 +6,7 @@ import com.studyplatform.dto.response.StudyStateResponse;
 import com.studyplatform.model.*;
 import com.studyplatform.service.BaseballService;
 import com.studyplatform.service.BingoService;
+import com.studyplatform.service.OmokService;
 import com.studyplatform.service.RoomService;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
@@ -31,13 +32,16 @@ public class StudyController {
     private final RoomService roomService;
     private final BaseballService baseballService;
     private final BingoService bingoService;
+    private final OmokService omokService;
 
     public StudyController(SimpMessagingTemplate msg, RoomService roomService,
-                           BaseballService baseballService, BingoService bingoService) {
+                           BaseballService baseballService, BingoService bingoService,
+                           OmokService omokService) {
         this.msg             = msg;
         this.roomService     = roomService;
         this.baseballService = baseballService;
         this.bingoService    = bingoService;
+        this.omokService     = omokService;
     }
 
     /** 방 입장 시 현재 상태 동기화 */
@@ -61,8 +65,10 @@ public class StudyController {
                     .currentTurn(0).winner(-1).playerNames(names).build();
         } else if (room.getStudyType() == StudyType.BASEBALL) {
             state = baseballService.buildInitialState(room);
-        } else {
+        } else if (room.getStudyType() == StudyType.BINGO) {
             state = bingoService.buildInitialState(room);
+        } else {
+            state = omokService.buildInitialState(room);
         }
         broadcast(roomId, state);
     }
@@ -94,9 +100,7 @@ public class StudyController {
                 broadcastError(roomId, e.getMessage()); return;
             }
             // 초기 게임 상태 브로드캐스트
-            StudyStateResponse state = room.getStudyType() == StudyType.BASEBALL
-                    ? baseballService.buildInitialState(room)
-                    : bingoService.buildInitialState(room);
+            StudyStateResponse state = buildInitialState(room);
             broadcast(roomId, state);
             return;
         }
@@ -111,9 +115,7 @@ public class StudyController {
             } catch (RuntimeException e) {
                 broadcastError(roomId, e.getMessage()); return;
             }
-            StudyStateResponse state = room.getStudyType() == StudyType.BASEBALL
-                    ? baseballService.buildInitialState(room)
-                    : bingoService.buildInitialState(room);
+            StudyStateResponse state = buildInitialState(room);
             broadcast(roomId, state);
             return;
         }
@@ -123,9 +125,11 @@ public class StudyController {
         if (room.getStatus() == StudyStatus.WAITING)  { broadcastError(roomId, "Game has not started yet."); return; }
 
         try {
-            StudyStateResponse response = room.getStudyType() == StudyType.BASEBALL
-                    ? baseballService.processMove(room, player, request)
-                    : bingoService.processMove(room, player, request);
+            StudyStateResponse response = switch (room.getStudyType()) {
+                case BASEBALL -> baseballService.processMove(room, player, request);
+                case BINGO -> bingoService.processMove(room, player, request);
+                case OMOK -> omokService.processMove(room, player, request);
+            };
             broadcast(roomId, response);
         } catch (IllegalArgumentException | IllegalStateException e) {
             broadcastError(roomId, e.getMessage());
@@ -150,6 +154,14 @@ public class StudyController {
 
     private void broadcast(String roomId, StudyStateResponse response) {
         msg.convertAndSend("/topic/study/" + roomId, response);
+    }
+
+    private StudyStateResponse buildInitialState(Room room) {
+        return switch (room.getStudyType()) {
+            case BASEBALL -> baseballService.buildInitialState(room);
+            case BINGO -> bingoService.buildInitialState(room);
+            case OMOK -> omokService.buildInitialState(room);
+        };
     }
 
     private void broadcastError(String roomId, String text) {
