@@ -3,24 +3,24 @@ package com.studyplatform.dto.request;
 import lombok.Data;
 
 /**
- * 게임 액션 / 채팅 요청 DTO
+ * 게임 액션 / 채팅 / 방 나가기 요청 DTO
  *
- * moveType 종류:
- *   SET_SECRET  - 숫자야구 비밀 숫자 설정  (data = "123")
- *   GUESS       - 숫자야구 추측            (data = "456")
- *   SET_BOARD   - 빙고 보드 주제 설정      (payload = String[][])
- *   CALL_TOPIC  - 빙고 주제 호출           (data = "주제명")
- *   CHAT        - 채팅 메시지              (data = "메시지 내용")
+ * moveType 목록:
+ *   START_GAME  - 방장: 게임 시작
+ *   RESTART     - 방장: 재시작
+ *   LEAVE       - 방 나가기 (방장이면 방 삭제, 아니면 인원 감소)
+ *   SET_SECRET  - 야구: 비밀 숫자 설정
+ *   GUESS       - 야구: 추측
+ *   SET_BOARD   - 빙고: 보드 주제 설정 (payload = List<List<String>>)
+ *   CALL_TOPIC  - 빙고: 주제 호출
+ *   CHAT        - 채팅 메시지 전송
  */
 @Data
 public class StudyMoveRequest {
     private String moveType;
     private String data;       // 단순 문자열 데이터
     private String sessionId;
-    /**
-     * 복잡한 데이터를 위한 추가 필드
-     * SET_BOARD 시 String[][] 형태의 2D 배열이 Jackson에 의해
-     * List<List<String>> 으로 역직렬화됩니다.
-     */
-    private Object payload;
+    private Object payload;    // SET_BOARD 시 2D 배열 (Jackson → List<List<String>>)
+    /** 채팅 전송 시 발신자의 이모지 (채팅 외 요청에서는 null) */
+    private String emoji;
 }
