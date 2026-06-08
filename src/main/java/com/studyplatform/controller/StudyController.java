@@ -146,10 +146,11 @@ public class StudyController {
         Player player = room.getPlayerBySession(request.getSessionId());
         String nickname = player != null ? player.getNickname() : "unknown";
         String text = request.getData();
+        String emoji = request.getEmoji() == null ? "" : request.getEmoji();
         if (text == null || text.trim().isEmpty()) return;
 
         msg.convertAndSend("/topic/chat/" + roomId,
-                new ChatMessage(nickname, text.trim(), System.currentTimeMillis()));
+                new ChatMessage(nickname, text.trim(), System.currentTimeMillis(), emoji));
     }
 
     private void broadcast(String roomId, StudyStateResponse response) {
