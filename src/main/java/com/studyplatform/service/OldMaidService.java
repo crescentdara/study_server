@@ -76,6 +76,13 @@ public class OldMaidService {
             return buildState(room, game, null);
         }
 
+        // ── 턴 종료
+        if ("END_TURN".equals(moveType)) {
+            String err = game.endTurn(player.getPlayerIndex());
+            if (err != null) throw new IllegalStateException(err);
+            return buildState(room, game, null);
+        }
+
         if (!"DRAW_CARD".equals(moveType)) {
             throw new IllegalArgumentException("Unknown moveType: " + moveType);
         }
