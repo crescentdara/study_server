@@ -5,5 +5,6 @@ public enum StudyType {
     BINGO,
     OMOK,
     TETRIS,
-    OLDMAID   // 도둑잡기 (Old Maid) 카드 게임
+    OLDMAID,
+    INCIDENT_AVOID
 }
