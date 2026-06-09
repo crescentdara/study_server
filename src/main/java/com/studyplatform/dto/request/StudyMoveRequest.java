@@ -23,4 +23,6 @@ public class StudyMoveRequest {
     private Object payload;    // SET_BOARD 시 2D 배열 (Jackson → List<List<String>>)
     /** 채팅 전송 시 발신자의 이모지 (채팅 외 요청에서는 null) */
     private String emoji;
+    /** 로비 채팅 전송 시 발신자의 닉네임 */
+    private String nickname;
 }
