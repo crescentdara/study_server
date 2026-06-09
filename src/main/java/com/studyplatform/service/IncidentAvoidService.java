@@ -11,6 +11,7 @@ import com.studyplatform.model.incident.IncidentAvoidPlayerState;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -67,11 +68,24 @@ public class IncidentAvoidService {
         state.setSurvivedMs(toLong(map.get("survivedMs"), state.getSurvivedMs()));
         state.setRunning(toBoolean(map.get("running"), state.isRunning()));
         state.setGameOver(toBoolean(map.get("gameOver"), state.isGameOver()));
-        Object incidents = map.get("incidents");
-        if (incidents instanceof List<?> rows) {
-            state.setIncidents((List<List<Double>>) rows);
-        }
+        state.setIncidents(normalizeIncidents(map.get("incidents")));
         state.setUpdatedAt(System.currentTimeMillis());
+    }
+
+    private List<List<Double>> normalizeIncidents(Object value) {
+        List<List<Double>> normalized = new ArrayList<>();
+        if (!(value instanceof List<?> rows)) return normalized;
+        for (Object row : rows) {
+            if (!(row instanceof List<?> cells)) continue;
+            List<Double> next = new ArrayList<>();
+            for (Object cell : cells) {
+                if (cell instanceof Number number) {
+                    next.add(number.doubleValue());
+                }
+            }
+            if (!next.isEmpty()) normalized.add(next);
+        }
+        return normalized;
     }
 
     private void updateWinner(Room room, IncidentAvoidGame game, int playerIndex) {
