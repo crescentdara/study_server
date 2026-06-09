@@ -128,9 +128,10 @@ public class OldMaidGame {
      * @return null: 성공 / 에러 메시지: 실패
      */
     public String discardPair(int playerIndex, int idx1, int idx2) {
-        if (dealing)               return "Still in dealing phase.";
-        if (loser != -1)           return "Game already finished.";
-        if (safe[playerIndex])     return "You have no cards.";
+        if (dealing)                    return "Still in dealing phase.";
+        if (loser != -1)                return "Game already finished.";
+        if (playerIndex != currentTurn) return "Not your turn.";
+        if (safe[playerIndex])          return "You have no cards.";
 
         List<int[]> hand = hands.get(playerIndex);
         if (idx1 < 0 || idx1 >= hand.size() ||
@@ -149,10 +150,6 @@ public class OldMaidGame {
         if (hand.isEmpty()) safe[playerIndex] = true;
         lastShuffle = -1;
         checkLoser();
-        // safe가 된 플레이어가 currentTurn이면 다음 active 플레이어에게 턴 이동
-        if (loser == -1 && safe[currentTurn]) {
-            currentTurn = nextActive(currentTurn);
-        }
         return null;
     }
 
@@ -185,7 +182,22 @@ public class OldMaidGame {
         if (fromHand.isEmpty()) safe[from] = true;
 
         checkLoser();
-        if (loser == -1) currentTurn = nextActive(currentTurn);
+        // 턴 이동은 endTurn()에서만 처리 — 카드 뽑은 후 바로 넘어가지 않음
+        return null;
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // 턴 종료
+    // ──────────────────────────────────────────────────────────────
+
+    /**
+     * 현재 플레이어가 자신의 턴을 종료하고 다음 active 플레이어에게 턴을 넘긴다.
+     */
+    public String endTurn(int playerIndex) {
+        if (dealing)                    return "Still in dealing phase.";
+        if (loser != -1)                return "Game already finished.";
+        if (playerIndex != currentTurn) return "Not your turn.";
+        currentTurn = nextActive(currentTurn);
         return null;
     }
 
