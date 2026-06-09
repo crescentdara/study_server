@@ -4,6 +4,7 @@ import com.studyplatform.model.*;
 import com.studyplatform.model.baseball.BaseballGame;
 import com.studyplatform.model.bingo.BingoGame;
 import com.studyplatform.model.omok.OmokGame;
+import com.studyplatform.model.oldmaid.OldMaidGame;
 import com.studyplatform.model.tetris.TetrisGame;
 import org.springframework.stereotype.Service;
 
@@ -44,6 +45,11 @@ public class RoomService {
                            int maxPlayers, int digits, int boardSize) {
         Room room = new Room(roomName, studyType);
         room.setMaxPlayers(studyType == StudyType.TETRIS ? 3 : studyType == StudyType.OMOK ? 2 : Math.max(2, Math.min(6, maxPlayers)));
+        // TETRIS=1명, OMOK=2명 고정, OLDMAID=2~7명, 나머지=2~6명
+        room.setMaxPlayers(studyType == StudyType.TETRIS ? 1
+                : studyType == StudyType.OMOK    ? 2
+                : studyType == StudyType.OLDMAID ? Math.max(2, Math.min(7, maxPlayers))
+                : Math.max(2, Math.min(6, maxPlayers)));
         room.setDigits(digits);
         room.setBoardSize(studyType == StudyType.OMOK ? 19 : studyType == StudyType.TETRIS ? 20 : boardSize);
         room.getPlayers().add(new Player(sessionId, nickname, 0));
@@ -61,6 +67,10 @@ public class RoomService {
         normalizeRoomConfig(room);
         if (room.isFull()) throw new RuntimeException("Room is full.");
         if (room.getStatus() != StudyStatus.WAITING) throw new RuntimeException("Game already started.");
+
+        // 같은 세션이 이미 입장해 있으면 중복 추가 방지 (나갔다 들어오는 경우)
+        if (room.getPlayerBySession(sessionId) != null)
+            throw new RuntimeException("Already in this room.");
 
         int nextIndex = room.getPlayers().size();
         room.getPlayers().add(new Player(sessionId, nickname, nextIndex));
@@ -83,7 +93,11 @@ public class RoomService {
             throw new RuntimeException("Game already started.");
 
         initGameData(room);
-        room.setStatus(room.getStudyType() == StudyType.OMOK || room.getStudyType() == StudyType.TETRIS ? StudyStatus.PLAYING : StudyStatus.SETUP);
+        // OMOK·TETRIS·OLDMAID는 SETUP 없이 바로 PLAYING
+        boolean directPlay = room.getStudyType() == StudyType.OMOK
+                          || room.getStudyType() == StudyType.TETRIS
+                          || room.getStudyType() == StudyType.OLDMAID;
+        room.setStatus(directPlay ? StudyStatus.PLAYING : StudyStatus.SETUP);
     }
 
     /**
@@ -97,7 +111,10 @@ public class RoomService {
             throw new RuntimeException("Game is not finished yet.");
 
         initGameData(room);         // 새 게임 데이터 생성
-        room.setStatus(room.getStudyType() == StudyType.OMOK || room.getStudyType() == StudyType.TETRIS ? StudyStatus.PLAYING : StudyStatus.SETUP);
+        boolean directPlay = room.getStudyType() == StudyType.OMOK
+                          || room.getStudyType() == StudyType.TETRIS
+                          || room.getStudyType() == StudyType.OLDMAID;
+        room.setStatus(directPlay ? StudyStatus.PLAYING : StudyStatus.SETUP);
     }
 
     /** 게임 타입에 맞는 게임 데이터 객체 생성 */
@@ -121,20 +138,57 @@ public class RoomService {
         }
     }
 
-    public Room getRoom(String roomId) {
+    /**
+     * 플레이어 퇴장 처리
+     *
+     * ─── 케이스별 동작 ────────────────────────────────────────────────────────
+     * 1. 방장(playerIndex=0)이 나가는 경우
+     *    → 방을 삭제하고 null 반환 (Controller가 ROOM_CLOSED 브로드캐스트)
+     *
+     * 2. 일반 플레이어가 나가는 경우
+     *    → 플레이어 목록에서 제거 후 playerIndex 재정렬
+     *    → 방 객체 반환 (Controller가 업데이트된 인원 수 브로드캐스트)
+     *
+     * 3. 방에 없는 sessionId인 경우 (이미 나감, 중복 요청)
+     *    → 현재 방 상태 그대로 반환 (무시)
+     *
+     * ─── playerIndex 재정렬 이유 ─────────────────────────────────────────────
+     * 예) [A(0), B(1), C(2)] 에서 B가 나가면 → [A(0), C(1)]
+     * C의 인덱스를 2→1로 갱신해야 턴 계산 등이 정상 동작합니다.
+     *
+     * @param roomId    대상 방 ID
+     * @param sessionId 퇴장하는 플레이어의 세션 ID
+     * @return 방장 퇴장 → null (방 삭제됨) / 그 외 → 업데이트된 Room
+     */
+    public Room leaveRoom(String roomId, String sessionId) {
         Room room = rooms.get(roomId);
-        if (room != null) normalizeRoomConfig(room);
+        if (room == null) return null;
+
+        // 해당 세션의 플레이어 탐색
+        Player leaving = room.getPlayerBySession(sessionId);
+        if (leaving == null) return room; // 이미 나간 플레이어 → 무시
+
+        boolean isHost = (leaving.getPlayerIndex() == 0);
+
+        if (isHost) {
+            // 방장 퇴장: 방 전체 삭제
+            rooms.remove(roomId);
+            return null; // null = 방이 없어졌음을 Controller에 알림
+        }
+
+        // 일반 플레이어 퇴장: 목록에서 제거
+        room.getPlayers().remove(leaving);
+
+        // playerIndex 재정렬 (0부터 연속 번호 유지)
+        for (int i = 0; i < room.getPlayers().size(); i++) {
+            room.getPlayers().get(i).setPlayerIndex(i);
+        }
+
         return room;
     }
-    public List<Room> getWaitingRooms() {
-        return rooms.values().stream()
-                .peek(this::normalizeRoomConfig)
-                .filter(r -> r.getStatus() == StudyStatus.WAITING)
-                .toList();
-    }
-    public List<Room> getAllRooms() {
-        rooms.values().forEach(this::normalizeRoomConfig);
-        return new ArrayList<>(rooms.values());
-    }
+
+    public Room getRoom(String roomId)    { return rooms.get(roomId); }
+    public List<Room> getWaitingRooms()   { return rooms.values().stream().filter(r -> r.getStatus() == StudyStatus.WAITING).toList(); }
+    public List<Room> getAllRooms()       { return new ArrayList<>(rooms.values()); }
     public void removeRoom(String roomId) { rooms.remove(roomId); }
 }

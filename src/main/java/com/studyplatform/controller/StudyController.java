@@ -7,6 +7,7 @@ import com.studyplatform.model.*;
 import com.studyplatform.service.BaseballService;
 import com.studyplatform.service.BingoService;
 import com.studyplatform.service.OmokService;
+import com.studyplatform.service.OldMaidService;
 import com.studyplatform.service.RoomService;
 import com.studyplatform.service.TetrisService;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
@@ -34,16 +35,19 @@ public class StudyController {
     private final BaseballService baseballService;
     private final BingoService bingoService;
     private final OmokService omokService;
+    private final OldMaidService oldMaidService;
     private final TetrisService tetrisService;
 
     public StudyController(SimpMessagingTemplate msg, RoomService roomService,
                            BaseballService baseballService, BingoService bingoService,
-                           OmokService omokService, TetrisService tetrisService) {
+                           OmokService omokService, OldMaidService oldMaidService,
+                           TetrisService tetrisService) {
         this.msg             = msg;
         this.roomService     = roomService;
         this.baseballService = baseballService;
         this.bingoService    = bingoService;
         this.omokService     = omokService;
+        this.oldMaidService  = oldMaidService;
         this.tetrisService   = tetrisService;
     }
 
@@ -72,6 +76,8 @@ public class StudyController {
             state = bingoService.buildInitialState(room);
         } else if (room.getStudyType() == StudyType.OMOK) {
             state = omokService.buildInitialState(room);
+        } else if (room.getStudyType() == StudyType.OLDMAID) {
+            state = oldMaidService.buildInitialState(room);
         } else {
             state = tetrisService.buildInitialState(room);
         }
@@ -93,6 +99,35 @@ public class StudyController {
         if (player == null) { broadcastError(roomId, "Not a member of this room."); return; }
 
         String moveType = request.getMoveType();
+
+        // ── 퇴장 처리 ────────────────────────────────────────────────
+        if ("LEAVE".equals(moveType)) {
+            Room updated = roomService.leaveRoom(roomId, request.getSessionId());
+
+            if (updated == null) {
+                // 방장이 나감 → 방 삭제, 나머지 플레이어에게 알림
+                // 'ROOM_CLOSED:' 접두어를 클라이언트가 감지해 로비로 이동
+                broadcast(roomId, StudyStateResponse.builder()
+                        .roomId(roomId)
+                        .message("ROOM_CLOSED: host left")
+                        .currentTurn(-1).winner(-1)
+                        .build());
+            } else {
+                // 일반 플레이어 퇴장 → 남은 인원 정보 브로드캐스트
+                String[] names = updated.getPlayers().stream()
+                        .map(Player::getNickname).toArray(String[]::new);
+                broadcast(roomId, StudyStateResponse.builder()
+                        .roomId(roomId)
+                        .studyType(updated.getStudyType())
+                        .status(updated.getStatus())
+                        .message(player.getNickname() + " has left. ("
+                                + names.length + "/" + updated.getMaxPlayers() + " players)")
+                        .currentTurn(0).winner(-1)
+                        .playerNames(names)
+                        .build());
+            }
+            return;
+        }
 
         // ── 게임 시작 (방장 전용) ──────────────────────────────────────
         if ("START_GAME".equals(moveType)) {
@@ -132,9 +167,10 @@ public class StudyController {
         try {
             StudyStateResponse response = switch (room.getStudyType()) {
                 case BASEBALL -> baseballService.processMove(room, player, request);
-                case BINGO -> bingoService.processMove(room, player, request);
-                case OMOK -> omokService.processMove(room, player, request);
-                case TETRIS -> tetrisService.processMove(room, player, request);
+                case BINGO    -> bingoService.processMove(room, player, request);
+                case OMOK     -> omokService.processMove(room, player, request);
+                case OLDMAID  -> oldMaidService.processMove(room, player, request);
+                case TETRIS   -> tetrisService.processMove(room, player, request);
             };
             broadcast(roomId, response);
         } catch (IllegalArgumentException | IllegalStateException e) {
@@ -166,9 +202,10 @@ public class StudyController {
     private StudyStateResponse buildInitialState(Room room) {
         return switch (room.getStudyType()) {
             case BASEBALL -> baseballService.buildInitialState(room);
-            case BINGO -> bingoService.buildInitialState(room);
-            case OMOK -> omokService.buildInitialState(room);
-            case TETRIS -> tetrisService.buildInitialState(room);
+            case BINGO    -> bingoService.buildInitialState(room);
+            case OMOK     -> omokService.buildInitialState(room);
+            case OLDMAID  -> oldMaidService.buildInitialState(room);
+            case TETRIS   -> tetrisService.buildInitialState(room);
         };
     }
 
