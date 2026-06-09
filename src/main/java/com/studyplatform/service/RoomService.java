@@ -125,6 +125,7 @@ public class RoomService {
             case BINGO    -> room.setGameData(new BingoGame(room.getBoardSize(), n));
             case OMOK     -> room.setGameData(new OmokGame(room.getBoardSize(), n));
             case TETRIS   -> room.setGameData(new TetrisGame(n));
+            case OLDMAID  -> room.setGameData(new OldMaidGame(n));
         }
     }
 
