@@ -29,7 +29,7 @@ public class RoomResponse {
         dto.setStudyType(room.getStudyType());
         dto.setStatus(room.getStatus());
         dto.setPlayerCount(room.getPlayers().size());
-        dto.setMaxPlayers(room.getMaxPlayers());
+        dto.setMaxPlayers(room.getStudyType() == StudyType.TETRIS ? 3 : room.getMaxPlayers());
         dto.setPlayerNames(room.getPlayers().stream().map(p -> p.getNickname()).toList());
         dto.setDigits(room.getDigits());
         dto.setBoardSize(room.getBoardSize());

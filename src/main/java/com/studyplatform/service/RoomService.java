@@ -4,6 +4,7 @@ import com.studyplatform.model.*;
 import com.studyplatform.model.baseball.BaseballGame;
 import com.studyplatform.model.bingo.BingoGame;
 import com.studyplatform.model.omok.OmokGame;
+import com.studyplatform.model.tetris.TetrisGame;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -42,7 +43,7 @@ public class RoomService {
                            String nickname, String sessionId,
                            int maxPlayers, int digits, int boardSize) {
         Room room = new Room(roomName, studyType);
-        room.setMaxPlayers(studyType == StudyType.TETRIS ? 1 : studyType == StudyType.OMOK ? 2 : Math.max(2, Math.min(6, maxPlayers)));
+        room.setMaxPlayers(studyType == StudyType.TETRIS ? 3 : studyType == StudyType.OMOK ? 2 : Math.max(2, Math.min(6, maxPlayers)));
         room.setDigits(digits);
         room.setBoardSize(studyType == StudyType.OMOK ? 19 : studyType == StudyType.TETRIS ? 20 : boardSize);
         room.getPlayers().add(new Player(sessionId, nickname, 0));
@@ -57,6 +58,7 @@ public class RoomService {
     public Room joinRoom(String roomId, String nickname, String sessionId) {
         Room room = rooms.get(roomId);
         if (room == null)  throw new RuntimeException("Room not found.");
+        normalizeRoomConfig(room);
         if (room.isFull()) throw new RuntimeException("Room is full.");
         if (room.getStatus() != StudyStatus.WAITING) throw new RuntimeException("Game already started.");
 
@@ -105,12 +107,34 @@ public class RoomService {
             case BASEBALL -> room.setGameData(new BaseballGame(room.getDigits(), n));
             case BINGO    -> room.setGameData(new BingoGame(room.getBoardSize(), n));
             case OMOK     -> room.setGameData(new OmokGame(room.getBoardSize(), n));
-            case TETRIS   -> room.setGameData(null);
+            case TETRIS   -> room.setGameData(new TetrisGame(n));
         }
     }
 
-    public Room getRoom(String roomId)    { return rooms.get(roomId); }
-    public List<Room> getWaitingRooms()   { return rooms.values().stream().filter(r -> r.getStatus() == StudyStatus.WAITING).toList(); }
-    public List<Room> getAllRooms()       { return new ArrayList<>(rooms.values()); }
+    private void normalizeRoomConfig(Room room) {
+        if (room.getStudyType() == StudyType.TETRIS) {
+            room.setMaxPlayers(3);
+            room.setBoardSize(20);
+        } else if (room.getStudyType() == StudyType.OMOK) {
+            room.setMaxPlayers(2);
+            room.setBoardSize(19);
+        }
+    }
+
+    public Room getRoom(String roomId) {
+        Room room = rooms.get(roomId);
+        if (room != null) normalizeRoomConfig(room);
+        return room;
+    }
+    public List<Room> getWaitingRooms() {
+        return rooms.values().stream()
+                .peek(this::normalizeRoomConfig)
+                .filter(r -> r.getStatus() == StudyStatus.WAITING)
+                .toList();
+    }
+    public List<Room> getAllRooms() {
+        rooms.values().forEach(this::normalizeRoomConfig);
+        return new ArrayList<>(rooms.values());
+    }
     public void removeRoom(String roomId) { rooms.remove(roomId); }
 }
