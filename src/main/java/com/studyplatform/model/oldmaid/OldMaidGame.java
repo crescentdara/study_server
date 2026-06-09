@@ -149,6 +149,10 @@ public class OldMaidGame {
         if (hand.isEmpty()) safe[playerIndex] = true;
         lastShuffle = -1;
         checkLoser();
+        // safe가 된 플레이어가 currentTurn이면 다음 active 플레이어에게 턴 이동
+        if (loser == -1 && safe[currentTurn]) {
+            currentTurn = nextActive(currentTurn);
+        }
         return null;
     }
 
@@ -167,6 +171,7 @@ public class OldMaidGame {
         if (dealing)               return "Still in dealing phase.";
         if (loser != -1)           return "Game already finished.";
         if (playerIndex != currentTurn) return "Not your turn.";
+        if (safe[playerIndex])     return "You are already safe.";
 
         int from = nextActive(currentTurn);
         List<int[]> fromHand = hands.get(from);

@@ -184,7 +184,18 @@ public class StudyController {
         }
     }
 
-    /** 채팅 메시지 처리 → /topic/chat/{roomId} 브로드캐스트 */
+    /** 로비 채팅 → /topic/lobby/chat 브로드캐스트 */
+    @MessageMapping("/study/lobby/chat")
+    public void lobbyChat(@Payload StudyMoveRequest request) {
+        String nickname = request.getNickname() != null ? request.getNickname() : "unknown";
+        String text     = request.getData();
+        String emoji    = request.getEmoji() != null ? request.getEmoji() : "";
+        if (text == null || text.trim().isEmpty()) return;
+        msg.convertAndSend("/topic/lobby/chat",
+                new ChatMessage(nickname, text.trim(), System.currentTimeMillis(), emoji));
+    }
+
+    /** 방 채팅 메시지 처리 → /topic/chat/{roomId} 브로드캐스트 */
     @MessageMapping("/study/{roomId}/chat")
     public void chat(@DestinationVariable String roomId,
                      @Payload StudyMoveRequest request) {
