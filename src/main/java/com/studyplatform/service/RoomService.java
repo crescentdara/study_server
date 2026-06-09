@@ -42,9 +42,9 @@ public class RoomService {
                            String nickname, String sessionId,
                            int maxPlayers, int digits, int boardSize) {
         Room room = new Room(roomName, studyType);
-        room.setMaxPlayers(studyType == StudyType.OMOK ? 2 : Math.max(2, Math.min(6, maxPlayers)));
+        room.setMaxPlayers(studyType == StudyType.TETRIS ? 1 : studyType == StudyType.OMOK ? 2 : Math.max(2, Math.min(6, maxPlayers)));
         room.setDigits(digits);
-        room.setBoardSize(studyType == StudyType.OMOK ? 19 : boardSize);
+        room.setBoardSize(studyType == StudyType.OMOK ? 19 : studyType == StudyType.TETRIS ? 20 : boardSize);
         room.getPlayers().add(new Player(sessionId, nickname, 0));
         rooms.put(room.getRoomId(), room);
         return room;
@@ -75,13 +75,13 @@ public class RoomService {
      * @throws RuntimeException 2명 미만이거나 이미 시작된 경우
      */
     public void startGame(Room room) {
-        if (room.getPlayers().size() < 2)
+        if (room.getStudyType() != StudyType.TETRIS && room.getPlayers().size() < 2)
             throw new RuntimeException("Need at least 2 players to start.");
         if (room.getStatus() != StudyStatus.WAITING)
             throw new RuntimeException("Game already started.");
 
         initGameData(room);
-        room.setStatus(room.getStudyType() == StudyType.OMOK ? StudyStatus.PLAYING : StudyStatus.SETUP);
+        room.setStatus(room.getStudyType() == StudyType.OMOK || room.getStudyType() == StudyType.TETRIS ? StudyStatus.PLAYING : StudyStatus.SETUP);
     }
 
     /**
@@ -95,7 +95,7 @@ public class RoomService {
             throw new RuntimeException("Game is not finished yet.");
 
         initGameData(room);         // 새 게임 데이터 생성
-        room.setStatus(room.getStudyType() == StudyType.OMOK ? StudyStatus.PLAYING : StudyStatus.SETUP);
+        room.setStatus(room.getStudyType() == StudyType.OMOK || room.getStudyType() == StudyType.TETRIS ? StudyStatus.PLAYING : StudyStatus.SETUP);
     }
 
     /** 게임 타입에 맞는 게임 데이터 객체 생성 */
@@ -105,6 +105,7 @@ public class RoomService {
             case BASEBALL -> room.setGameData(new BaseballGame(room.getDigits(), n));
             case BINGO    -> room.setGameData(new BingoGame(room.getBoardSize(), n));
             case OMOK     -> room.setGameData(new OmokGame(room.getBoardSize(), n));
+            case TETRIS   -> room.setGameData(null);
         }
     }
 
