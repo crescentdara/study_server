@@ -5,6 +5,7 @@ import com.studyplatform.model.baseball.BaseballGame;
 import com.studyplatform.model.bingo.BingoGame;
 import com.studyplatform.model.omok.OmokGame;
 import com.studyplatform.model.oldmaid.OldMaidGame;
+import com.studyplatform.model.tetris.TetrisGame;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -43,6 +44,7 @@ public class RoomService {
                            String nickname, String sessionId,
                            int maxPlayers, int digits, int boardSize) {
         Room room = new Room(roomName, studyType);
+        room.setMaxPlayers(studyType == StudyType.TETRIS ? 3 : studyType == StudyType.OMOK ? 2 : Math.max(2, Math.min(6, maxPlayers)));
         // TETRIS=1명, OMOK=2명 고정, OLDMAID=2~7명, 나머지=2~6명
         room.setMaxPlayers(studyType == StudyType.TETRIS ? 1
                 : studyType == StudyType.OMOK    ? 2
@@ -62,6 +64,7 @@ public class RoomService {
     public Room joinRoom(String roomId, String nickname, String sessionId) {
         Room room = rooms.get(roomId);
         if (room == null)  throw new RuntimeException("Room not found.");
+        normalizeRoomConfig(room);
         if (room.isFull()) throw new RuntimeException("Room is full.");
         if (room.getStatus() != StudyStatus.WAITING) throw new RuntimeException("Game already started.");
 
@@ -121,8 +124,17 @@ public class RoomService {
             case BASEBALL -> room.setGameData(new BaseballGame(room.getDigits(), n));
             case BINGO    -> room.setGameData(new BingoGame(room.getBoardSize(), n));
             case OMOK     -> room.setGameData(new OmokGame(room.getBoardSize(), n));
-            case TETRIS   -> room.setGameData(null);
-            case OLDMAID  -> room.setGameData(new OldMaidGame(n)); // 카드 자동 배분
+            case TETRIS   -> room.setGameData(new TetrisGame(n));
+        }
+    }
+
+    private void normalizeRoomConfig(Room room) {
+        if (room.getStudyType() == StudyType.TETRIS) {
+            room.setMaxPlayers(3);
+            room.setBoardSize(20);
+        } else if (room.getStudyType() == StudyType.OMOK) {
+            room.setMaxPlayers(2);
+            room.setBoardSize(19);
         }
     }
 
