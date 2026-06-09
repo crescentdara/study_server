@@ -6,6 +6,7 @@ import com.studyplatform.dto.response.StudyStateResponse;
 import com.studyplatform.model.*;
 import com.studyplatform.service.BaseballService;
 import com.studyplatform.service.BingoService;
+import com.studyplatform.service.IncidentAvoidService;
 import com.studyplatform.service.OmokService;
 import com.studyplatform.service.OldMaidService;
 import com.studyplatform.service.RoomService;
@@ -37,11 +38,12 @@ public class StudyController {
     private final OmokService omokService;
     private final OldMaidService oldMaidService;
     private final TetrisService tetrisService;
+    private final IncidentAvoidService incidentAvoidService;
 
     public StudyController(SimpMessagingTemplate msg, RoomService roomService,
                            BaseballService baseballService, BingoService bingoService,
                            OmokService omokService, OldMaidService oldMaidService,
-                           TetrisService tetrisService) {
+                           TetrisService tetrisService, IncidentAvoidService incidentAvoidService) {
         this.msg             = msg;
         this.roomService     = roomService;
         this.baseballService = baseballService;
@@ -49,6 +51,7 @@ public class StudyController {
         this.omokService     = omokService;
         this.oldMaidService  = oldMaidService;
         this.tetrisService   = tetrisService;
+        this.incidentAvoidService = incidentAvoidService;
     }
 
     /** 방 입장 시 현재 상태 동기화 */
@@ -78,8 +81,10 @@ public class StudyController {
             state = omokService.buildInitialState(room);
         } else if (room.getStudyType() == StudyType.OLDMAID) {
             state = oldMaidService.buildInitialState(room);
-        } else {
+        } else if (room.getStudyType() == StudyType.TETRIS) {
             state = tetrisService.buildInitialState(room);
+        } else {
+            state = incidentAvoidService.buildInitialState(room);
         }
         broadcast(roomId, state);
     }
@@ -171,6 +176,7 @@ public class StudyController {
                 case OMOK     -> omokService.processMove(room, player, request);
                 case OLDMAID  -> oldMaidService.processMove(room, player, request);
                 case TETRIS   -> tetrisService.processMove(room, player, request);
+                case INCIDENT_AVOID -> incidentAvoidService.processMove(room, player, request);
             };
             broadcast(roomId, response);
         } catch (IllegalArgumentException | IllegalStateException e) {
@@ -217,6 +223,7 @@ public class StudyController {
             case OMOK     -> omokService.buildInitialState(room);
             case OLDMAID  -> oldMaidService.buildInitialState(room);
             case TETRIS   -> tetrisService.buildInitialState(room);
+            case INCIDENT_AVOID -> incidentAvoidService.buildInitialState(room);
         };
     }
 

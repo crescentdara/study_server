@@ -3,6 +3,7 @@ package com.studyplatform.service;
 import com.studyplatform.model.*;
 import com.studyplatform.model.baseball.BaseballGame;
 import com.studyplatform.model.bingo.BingoGame;
+import com.studyplatform.model.incident.IncidentAvoidGame;
 import com.studyplatform.model.omok.OmokGame;
 import com.studyplatform.model.oldmaid.OldMaidGame;
 import com.studyplatform.model.tetris.TetrisGame;
@@ -44,14 +45,14 @@ public class RoomService {
                            String nickname, String sessionId,
                            int maxPlayers, int digits, int boardSize) {
         Room room = new Room(roomName, studyType);
-        room.setMaxPlayers(studyType == StudyType.TETRIS ? 3 : studyType == StudyType.OMOK ? 2 : Math.max(2, Math.min(6, maxPlayers)));
+        room.setMaxPlayers(studyType == StudyType.TETRIS || studyType == StudyType.INCIDENT_AVOID ? 3 : studyType == StudyType.OMOK ? 2 : Math.max(2, Math.min(6, maxPlayers)));
         // TETRIS=1명, OMOK=2명 고정, OLDMAID=2~7명, 나머지=2~6명
-        room.setMaxPlayers(studyType == StudyType.TETRIS ? 1
+        room.setMaxPlayers(studyType == StudyType.TETRIS || studyType == StudyType.INCIDENT_AVOID ? 3
                 : studyType == StudyType.OMOK    ? 2
                 : studyType == StudyType.OLDMAID ? Math.max(2, Math.min(7, maxPlayers))
                 : Math.max(2, Math.min(6, maxPlayers)));
         room.setDigits(digits);
-        room.setBoardSize(studyType == StudyType.OMOK ? 19 : studyType == StudyType.TETRIS ? 20 : boardSize);
+        room.setBoardSize(studyType == StudyType.OMOK ? 19 : studyType == StudyType.TETRIS || studyType == StudyType.INCIDENT_AVOID ? 20 : boardSize);
         room.getPlayers().add(new Player(sessionId, nickname, 0));
         rooms.put(room.getRoomId(), room);
         return room;
@@ -87,7 +88,7 @@ public class RoomService {
      * @throws RuntimeException 2명 미만이거나 이미 시작된 경우
      */
     public void startGame(Room room) {
-        if (room.getStudyType() != StudyType.TETRIS && room.getPlayers().size() < 2)
+        if (room.getStudyType() != StudyType.TETRIS && room.getStudyType() != StudyType.INCIDENT_AVOID && room.getPlayers().size() < 2)
             throw new RuntimeException("Need at least 2 players to start.");
         if (room.getStatus() != StudyStatus.WAITING)
             throw new RuntimeException("Game already started.");
@@ -96,6 +97,7 @@ public class RoomService {
         // OMOK·TETRIS·OLDMAID는 SETUP 없이 바로 PLAYING
         boolean directPlay = room.getStudyType() == StudyType.OMOK
                           || room.getStudyType() == StudyType.TETRIS
+                          || room.getStudyType() == StudyType.INCIDENT_AVOID
                           || room.getStudyType() == StudyType.OLDMAID;
         room.setStatus(directPlay ? StudyStatus.PLAYING : StudyStatus.SETUP);
     }
@@ -113,6 +115,7 @@ public class RoomService {
         initGameData(room);         // 새 게임 데이터 생성
         boolean directPlay = room.getStudyType() == StudyType.OMOK
                           || room.getStudyType() == StudyType.TETRIS
+                          || room.getStudyType() == StudyType.INCIDENT_AVOID
                           || room.getStudyType() == StudyType.OLDMAID;
         room.setStatus(directPlay ? StudyStatus.PLAYING : StudyStatus.SETUP);
     }
@@ -126,11 +129,12 @@ public class RoomService {
             case OMOK     -> room.setGameData(new OmokGame(room.getBoardSize(), n));
             case TETRIS   -> room.setGameData(new TetrisGame(n));
             case OLDMAID  -> room.setGameData(new OldMaidGame(n));
+            case INCIDENT_AVOID -> room.setGameData(new IncidentAvoidGame(n));
         }
     }
 
     private void normalizeRoomConfig(Room room) {
-        if (room.getStudyType() == StudyType.TETRIS) {
+        if (room.getStudyType() == StudyType.TETRIS || room.getStudyType() == StudyType.INCIDENT_AVOID) {
             room.setMaxPlayers(3);
             room.setBoardSize(20);
         } else if (room.getStudyType() == StudyType.OMOK) {
@@ -188,8 +192,20 @@ public class RoomService {
         return room;
     }
 
-    public Room getRoom(String roomId)    { return rooms.get(roomId); }
-    public List<Room> getWaitingRooms()   { return rooms.values().stream().filter(r -> r.getStatus() == StudyStatus.WAITING).toList(); }
-    public List<Room> getAllRooms()       { return new ArrayList<>(rooms.values()); }
+    public Room getRoom(String roomId) {
+        Room room = rooms.get(roomId);
+        if (room != null) normalizeRoomConfig(room);
+        return room;
+    }
+    public List<Room> getWaitingRooms() {
+        return rooms.values().stream()
+                .peek(this::normalizeRoomConfig)
+                .filter(r -> r.getStatus() == StudyStatus.WAITING)
+                .toList();
+    }
+    public List<Room> getAllRooms() {
+        rooms.values().forEach(this::normalizeRoomConfig);
+        return new ArrayList<>(rooms.values());
+    }
     public void removeRoom(String roomId) { rooms.remove(roomId); }
 }
