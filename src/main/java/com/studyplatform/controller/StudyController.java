@@ -6,6 +6,7 @@ import com.studyplatform.dto.response.StudyStateResponse;
 import com.studyplatform.model.*;
 import com.studyplatform.service.BaseballService;
 import com.studyplatform.service.BingoService;
+import com.studyplatform.service.BreakoutService;
 import com.studyplatform.service.IncidentAvoidService;
 import com.studyplatform.service.OmokService;
 import com.studyplatform.service.OldMaidService;
@@ -39,11 +40,13 @@ public class StudyController {
     private final OldMaidService oldMaidService;
     private final TetrisService tetrisService;
     private final IncidentAvoidService incidentAvoidService;
+    private final BreakoutService breakoutService;
 
     public StudyController(SimpMessagingTemplate msg, RoomService roomService,
                            BaseballService baseballService, BingoService bingoService,
                            OmokService omokService, OldMaidService oldMaidService,
-                           TetrisService tetrisService, IncidentAvoidService incidentAvoidService) {
+                           TetrisService tetrisService, IncidentAvoidService incidentAvoidService,
+                           BreakoutService breakoutService) {
         this.msg             = msg;
         this.roomService     = roomService;
         this.baseballService = baseballService;
@@ -52,6 +55,7 @@ public class StudyController {
         this.oldMaidService  = oldMaidService;
         this.tetrisService   = tetrisService;
         this.incidentAvoidService = incidentAvoidService;
+        this.breakoutService = breakoutService;
     }
 
     /** 방 입장 시 현재 상태 동기화 */
@@ -83,6 +87,8 @@ public class StudyController {
             state = oldMaidService.buildInitialState(room);
         } else if (room.getStudyType() == StudyType.TETRIS) {
             state = tetrisService.buildInitialState(room);
+        } else if (room.getStudyType() == StudyType.BREAKOUT) {
+            state = breakoutService.buildInitialState(room);
         } else {
             state = incidentAvoidService.buildInitialState(room);
         }
@@ -177,6 +183,7 @@ public class StudyController {
                 case OLDMAID  -> oldMaidService.processMove(room, player, request);
                 case TETRIS   -> tetrisService.processMove(room, player, request);
                 case INCIDENT_AVOID -> incidentAvoidService.processMove(room, player, request);
+                case BREAKOUT -> breakoutService.processMove(room, player, request);
             };
             broadcast(roomId, response);
         } catch (IllegalArgumentException | IllegalStateException e) {
@@ -224,6 +231,7 @@ public class StudyController {
             case OLDMAID  -> oldMaidService.buildInitialState(room);
             case TETRIS   -> tetrisService.buildInitialState(room);
             case INCIDENT_AVOID -> incidentAvoidService.buildInitialState(room);
+            case BREAKOUT -> breakoutService.buildInitialState(room);
         };
     }
 

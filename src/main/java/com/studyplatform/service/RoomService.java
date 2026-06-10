@@ -3,6 +3,7 @@ package com.studyplatform.service;
 import com.studyplatform.model.*;
 import com.studyplatform.model.baseball.BaseballGame;
 import com.studyplatform.model.bingo.BingoGame;
+import com.studyplatform.model.breakout.BreakoutGame;
 import com.studyplatform.model.incident.IncidentAvoidGame;
 import com.studyplatform.model.omok.OmokGame;
 import com.studyplatform.model.oldmaid.OldMaidGame;
@@ -45,14 +46,14 @@ public class RoomService {
                            String nickname, String sessionId,
                            int maxPlayers, int digits, int boardSize) {
         Room room = new Room(roomName, studyType);
-        room.setMaxPlayers(studyType == StudyType.TETRIS || studyType == StudyType.INCIDENT_AVOID ? 3 : studyType == StudyType.OMOK ? 2 : Math.max(2, Math.min(6, maxPlayers)));
+        room.setMaxPlayers(studyType == StudyType.TETRIS || studyType == StudyType.INCIDENT_AVOID || studyType == StudyType.BREAKOUT ? 3 : studyType == StudyType.OMOK ? 2 : Math.max(2, Math.min(6, maxPlayers)));
         // TETRIS=1명, OMOK=2명 고정, OLDMAID=2~7명, 나머지=2~6명
-        room.setMaxPlayers(studyType == StudyType.TETRIS || studyType == StudyType.INCIDENT_AVOID ? 3
+        room.setMaxPlayers(studyType == StudyType.TETRIS || studyType == StudyType.INCIDENT_AVOID || studyType == StudyType.BREAKOUT ? 3
                 : studyType == StudyType.OMOK    ? 2
                 : studyType == StudyType.OLDMAID ? Math.max(2, Math.min(7, maxPlayers))
                 : Math.max(2, Math.min(6, maxPlayers)));
         room.setDigits(digits);
-        room.setBoardSize(studyType == StudyType.OMOK ? 19 : studyType == StudyType.TETRIS || studyType == StudyType.INCIDENT_AVOID ? 20 : boardSize);
+        room.setBoardSize(studyType == StudyType.OMOK ? 19 : studyType == StudyType.TETRIS || studyType == StudyType.INCIDENT_AVOID || studyType == StudyType.BREAKOUT ? 20 : boardSize);
         room.getPlayers().add(new Player(sessionId, nickname, 0));
         rooms.put(room.getRoomId(), room);
         return room;
@@ -88,7 +89,7 @@ public class RoomService {
      * @throws RuntimeException 2명 미만이거나 이미 시작된 경우
      */
     public void startGame(Room room) {
-        if (room.getStudyType() != StudyType.TETRIS && room.getStudyType() != StudyType.INCIDENT_AVOID && room.getPlayers().size() < 2)
+        if (room.getStudyType() != StudyType.TETRIS && room.getStudyType() != StudyType.INCIDENT_AVOID && room.getStudyType() != StudyType.BREAKOUT && room.getPlayers().size() < 2)
             throw new RuntimeException("Need at least 2 players to start.");
         if (room.getStatus() != StudyStatus.WAITING)
             throw new RuntimeException("Game already started.");
@@ -98,6 +99,7 @@ public class RoomService {
         boolean directPlay = room.getStudyType() == StudyType.OMOK
                           || room.getStudyType() == StudyType.TETRIS
                           || room.getStudyType() == StudyType.INCIDENT_AVOID
+                          || room.getStudyType() == StudyType.BREAKOUT
                           || room.getStudyType() == StudyType.OLDMAID;
         room.setStatus(directPlay ? StudyStatus.PLAYING : StudyStatus.SETUP);
     }
@@ -116,6 +118,7 @@ public class RoomService {
         boolean directPlay = room.getStudyType() == StudyType.OMOK
                           || room.getStudyType() == StudyType.TETRIS
                           || room.getStudyType() == StudyType.INCIDENT_AVOID
+                          || room.getStudyType() == StudyType.BREAKOUT
                           || room.getStudyType() == StudyType.OLDMAID;
         room.setStatus(directPlay ? StudyStatus.PLAYING : StudyStatus.SETUP);
     }
@@ -130,11 +133,12 @@ public class RoomService {
             case TETRIS   -> room.setGameData(new TetrisGame(n));
             case OLDMAID  -> room.setGameData(new OldMaidGame(n));
             case INCIDENT_AVOID -> room.setGameData(new IncidentAvoidGame(n));
+            case BREAKOUT -> room.setGameData(new BreakoutGame(n));
         }
     }
 
     private void normalizeRoomConfig(Room room) {
-        if (room.getStudyType() == StudyType.TETRIS || room.getStudyType() == StudyType.INCIDENT_AVOID) {
+        if (room.getStudyType() == StudyType.TETRIS || room.getStudyType() == StudyType.INCIDENT_AVOID || room.getStudyType() == StudyType.BREAKOUT) {
             room.setMaxPlayers(3);
             room.setBoardSize(20);
         } else if (room.getStudyType() == StudyType.OMOK) {
