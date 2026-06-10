@@ -15,11 +15,26 @@ import java.util.Map;
 @Service
 public class OmokService {
     public StudyStateResponse processMove(Room room, Player player, StudyMoveRequest request) {
-        if (!"PLACE_STONE".equals(request.getMoveType())) {
+        if (!"PLACE_STONE".equals(request.getMoveType()) && !"OMOK_RPS".equals(request.getMoveType())) {
             throw new IllegalArgumentException("Unknown action: " + request.getMoveType());
         }
 
         OmokGame game = (OmokGame) room.getGameData();
+        if ("OMOK_RPS".equals(request.getMoveType())) {
+            String choice = readChoice(request.getPayload(), request.getData());
+            game.setOpeningChoice(player.getPlayerIndex(), choice);
+            String message = player.getNickname() + " selected RPS.";
+            if (game.allOpeningChoicesReady()) {
+                boolean decided = game.decideFirstPlayer();
+                if (decided) {
+                    message = room.getPlayers().get(game.getFirstPlayerIndex()).getNickname() + " goes first. First player 3-3 is forbidden.";
+                } else {
+                    message = "RPS tied. Select again.";
+                }
+            }
+            return buildResponse(room, game, message);
+        }
+
         int[] cell = readCell(request.getPayload(), request.getData());
         game.placeStone(player.getPlayerIndex(), cell[0], cell[1]);
 
@@ -39,8 +54,7 @@ public class OmokService {
 
     public StudyStateResponse buildInitialState(Room room) {
         OmokGame game = (OmokGame) room.getGameData();
-        String first = room.getPlayers().get(0).getNickname();
-        return buildResponse(room, game, "OMOK started. " + first + " goes first. P1 3-3 is forbidden.");
+        return buildResponse(room, game, "OMOK started. Select rock, paper, or scissors to decide first move.");
     }
 
     public StudyStateResponse buildResponse(Room room, OmokGame game, String message) {
@@ -58,6 +72,9 @@ public class OmokService {
         gameData.put("lastRow", game.getLastRow());
         gameData.put("lastCol", game.getLastCol());
         gameData.put("winPath", game.getWinPath());
+        gameData.put("firstDecided", game.isFirstDecided());
+        gameData.put("firstPlayerIndex", game.getFirstPlayerIndex());
+        gameData.put("openingChoices", game.getOpeningChoices());
 
         return StudyStateResponse.builder()
                 .roomId(room.getRoomId())
@@ -91,5 +108,15 @@ public class OmokService {
         }
 
         throw new IllegalArgumentException("Cell coordinates are required.");
+    }
+
+    private String readChoice(Object payload, String data) {
+        Object rawChoice = null;
+        if (payload instanceof Map<?, ?> raw) {
+            rawChoice = raw.get("choice");
+        }
+        String choice = rawChoice != null ? rawChoice.toString() : data;
+        if (choice == null) throw new IllegalArgumentException("RPS choice is required.");
+        return choice.trim().toUpperCase();
     }
 }
