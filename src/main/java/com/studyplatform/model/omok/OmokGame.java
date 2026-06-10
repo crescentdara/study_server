@@ -17,15 +17,20 @@ public class OmokGame {
     private int moveCount = 0;
     private int lastRow = -1;
     private int lastCol = -1;
+    private boolean firstDecided = false;
+    private int firstPlayerIndex = -1;
+    private String[] openingChoices;
 
     public OmokGame(int size, int numPlayers) {
         this.size = 19;
         this.numPlayers = numPlayers;
         this.board = new int[this.size][this.size];
+        this.openingChoices = new String[numPlayers];
     }
 
     public void placeStone(int playerIndex, int row, int col) {
         if (winner >= 0) throw new IllegalStateException("Game already finished.");
+        if (!firstDecided) throw new IllegalStateException("First player is not decided yet.");
         if (playerIndex != currentTurn) throw new IllegalStateException("Not your turn.");
         if (row < 0 || row >= size || col < 0 || col >= size) {
             throw new IllegalArgumentException("Cell is outside the board.");
@@ -35,10 +40,10 @@ public class OmokGame {
         int mark = playerIndex + 1;
         board[row][col] = mark;
 
-        if (playerIndex == 0 && !hasFive(row, col, mark) && countOpenThrees(row, col, mark) >= 2) {
+        if (playerIndex == firstPlayerIndex && !hasFive(row, col, mark) && countOpenThrees(row, col, mark) >= 2) {
             board[row][col] = 0;
             winPath.clear();
-            throw new IllegalArgumentException("P1 cannot place a 3-3 forbidden move.");
+            throw new IllegalArgumentException("First player cannot place a 3-3 forbidden move.");
         }
 
         moveCount++;
@@ -50,6 +55,48 @@ public class OmokGame {
         } else {
             currentTurn = (currentTurn + 1) % numPlayers;
         }
+    }
+
+    public void setOpeningChoice(int playerIndex, String choice) {
+        if (firstDecided) throw new IllegalStateException("First player is already decided.");
+        if (playerIndex < 0 || playerIndex >= openingChoices.length) {
+            throw new IllegalArgumentException("Invalid player.");
+        }
+        if (openingChoices[playerIndex] != null) throw new IllegalStateException("Already selected.");
+        if (!"ROCK".equals(choice) && !"PAPER".equals(choice) && !"SCISSORS".equals(choice)) {
+            throw new IllegalArgumentException("Invalid RPS choice.");
+        }
+        openingChoices[playerIndex] = choice;
+    }
+
+    public boolean allOpeningChoicesReady() {
+        for (String choice : openingChoices) {
+            if (choice == null) return false;
+        }
+        return openingChoices.length > 0;
+    }
+
+    public boolean decideFirstPlayer() {
+        if (!allOpeningChoicesReady()) return false;
+        if (openingChoices.length < 2) {
+            firstPlayerIndex = 0;
+            currentTurn = 0;
+            firstDecided = true;
+            return true;
+        }
+        String p0 = openingChoices[0];
+        String p1 = openingChoices[1];
+        if (p0.equals(p1)) {
+            openingChoices = new String[numPlayers];
+            return false;
+        }
+        boolean p0Wins = ("ROCK".equals(p0) && "SCISSORS".equals(p1))
+                || ("SCISSORS".equals(p0) && "PAPER".equals(p1))
+                || ("PAPER".equals(p0) && "ROCK".equals(p1));
+        firstPlayerIndex = p0Wins ? 0 : 1;
+        currentTurn = firstPlayerIndex;
+        firstDecided = true;
+        return true;
     }
 
     public boolean isDraw() {
