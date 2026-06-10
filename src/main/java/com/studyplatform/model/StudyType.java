@@ -6,5 +6,6 @@ public enum StudyType {
     OMOK,
     TETRIS,
     OLDMAID,
-    INCIDENT_AVOID
+    INCIDENT_AVOID,
+    BREAKOUT
 }
