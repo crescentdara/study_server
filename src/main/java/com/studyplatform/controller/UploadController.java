@@ -1,5 +1,6 @@
 package com.studyplatform.controller;
 
+import com.studyplatform.config.UploadStorageProperties;
 import com.studyplatform.dto.response.ImageUploadResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -13,7 +14,6 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -21,8 +21,6 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/uploads")
 public class UploadController {
-    private static final long MAX_IMAGE_BYTES = 5L * 1024L * 1024L;
-    private static final Path CHAT_UPLOAD_DIR = Path.of("uploads", "chat").toAbsolutePath().normalize();
     private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of(
             MediaType.IMAGE_JPEG_VALUE,
             MediaType.IMAGE_PNG_VALUE,
@@ -41,8 +39,8 @@ public class UploadController {
         if (file.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Image file is required.");
         }
-        if (file.getSize() > MAX_IMAGE_BYTES) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Image must be 5MB or smaller.");
+        if (file.getSize() > UploadStorageProperties.MAX_IMAGE_BYTES) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Image must be 10MB or smaller.");
         }
 
         String contentType = file.getContentType();
@@ -51,10 +49,10 @@ public class UploadController {
         }
 
         try {
-            Files.createDirectories(CHAT_UPLOAD_DIR);
+            Files.createDirectories(UploadStorageProperties.CHAT_UPLOAD_DIR);
             String storedName = UUID.randomUUID() + EXTENSIONS.get(contentType);
-            Path target = CHAT_UPLOAD_DIR.resolve(storedName).normalize();
-            if (!target.startsWith(CHAT_UPLOAD_DIR)) {
+            java.nio.file.Path target = UploadStorageProperties.CHAT_UPLOAD_DIR.resolve(storedName).normalize();
+            if (!target.startsWith(UploadStorageProperties.CHAT_UPLOAD_DIR)) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid file path.");
             }
             file.transferTo(target);

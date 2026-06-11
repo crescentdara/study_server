@@ -2,6 +2,7 @@ package com.studyplatform;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * 게임 플랫폼 메인 애플리케이션 진입점
@@ -14,6 +15,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  *                          @Controller 등을 자동으로 스캔해서 빈으로 등록
  */
 @SpringBootApplication
+@EnableScheduling
 public class StudyPlatformApplication {
 
     public static void main(String[] args) {
