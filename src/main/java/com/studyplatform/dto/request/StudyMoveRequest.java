@@ -25,4 +25,8 @@ public class StudyMoveRequest {
     private String emoji;
     /** 로비 채팅 전송 시 발신자의 닉네임 */
     private String nickname;
+    private String type;
+    private String imageUrl;
+    private String fileName;
+    private Long fileSize;
 }

@@ -195,11 +195,10 @@ public class StudyController {
     @MessageMapping("/study/lobby/chat")
     public void lobbyChat(@Payload StudyMoveRequest request) {
         String nickname = request.getNickname() != null ? request.getNickname() : "unknown";
-        String text     = request.getData();
         String emoji    = request.getEmoji() != null ? request.getEmoji() : "";
-        if (text == null || text.trim().isEmpty()) return;
-        msg.convertAndSend("/topic/lobby/chat",
-                new ChatMessage(nickname, text.trim(), System.currentTimeMillis(), emoji));
+        ChatMessage chatMessage = buildChatMessage(nickname, emoji, request);
+        if (chatMessage == null) return;
+        msg.convertAndSend("/topic/lobby/chat", chatMessage);
     }
 
     /** 방 채팅 메시지 처리 → /topic/chat/{roomId} 브로드캐스트 */
@@ -211,12 +210,31 @@ public class StudyController {
 
         Player player = room.getPlayerBySession(request.getSessionId());
         String nickname = player != null ? player.getNickname() : "unknown";
-        String text = request.getData();
         String emoji = request.getEmoji() == null ? "" : request.getEmoji();
-        if (text == null || text.trim().isEmpty()) return;
+        ChatMessage chatMessage = buildChatMessage(nickname, emoji, request);
+        if (chatMessage == null) return;
+        msg.convertAndSend("/topic/chat/" + roomId, chatMessage);
+    }
 
-        msg.convertAndSend("/topic/chat/" + roomId,
-                new ChatMessage(nickname, text.trim(), System.currentTimeMillis(), emoji));
+    private ChatMessage buildChatMessage(String nickname, String emoji, StudyMoveRequest request) {
+        String type = request.getType() == null ? "TEXT" : request.getType().trim().toUpperCase();
+        String text = request.getData();
+
+        if ("IMAGE".equals(type)) {
+            String imageUrl = request.getImageUrl();
+            if (imageUrl == null || !imageUrl.startsWith("/uploads/chat/")) return null;
+
+            ChatMessage message = new ChatMessage(nickname, text == null ? "" : text.trim(),
+                    System.currentTimeMillis(), emoji);
+            message.setType("IMAGE");
+            message.setImageUrl(imageUrl);
+            message.setFileName(request.getFileName());
+            message.setFileSize(request.getFileSize());
+            return message;
+        }
+
+        if (text == null || text.trim().isEmpty()) return null;
+        return new ChatMessage(nickname, text.trim(), System.currentTimeMillis(), emoji);
     }
 
     private void broadcast(String roomId, StudyStateResponse response) {
