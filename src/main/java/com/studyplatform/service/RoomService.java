@@ -4,6 +4,7 @@ import com.studyplatform.model.*;
 import com.studyplatform.model.baseball.BaseballGame;
 import com.studyplatform.model.bingo.BingoGame;
 import com.studyplatform.model.breakout.BreakoutGame;
+import com.studyplatform.model.catchmind.CatchMindGame;
 import com.studyplatform.model.incident.IncidentAvoidGame;
 import com.studyplatform.model.omok.OmokGame;
 import com.studyplatform.model.oldmaid.OldMaidGame;
@@ -100,6 +101,7 @@ public class RoomService {
                           || room.getStudyType() == StudyType.TETRIS
                           || room.getStudyType() == StudyType.INCIDENT_AVOID
                           || room.getStudyType() == StudyType.BREAKOUT
+                          || room.getStudyType() == StudyType.CATCHMIND
                           || room.getStudyType() == StudyType.OLDMAID;
         room.setStatus(directPlay ? StudyStatus.PLAYING : StudyStatus.SETUP);
     }
@@ -119,6 +121,7 @@ public class RoomService {
                           || room.getStudyType() == StudyType.TETRIS
                           || room.getStudyType() == StudyType.INCIDENT_AVOID
                           || room.getStudyType() == StudyType.BREAKOUT
+                          || room.getStudyType() == StudyType.CATCHMIND
                           || room.getStudyType() == StudyType.OLDMAID;
         room.setStatus(directPlay ? StudyStatus.PLAYING : StudyStatus.SETUP);
     }
@@ -134,6 +137,7 @@ public class RoomService {
             case OLDMAID  -> room.setGameData(new OldMaidGame(n));
             case INCIDENT_AVOID -> room.setGameData(new IncidentAvoidGame(n));
             case BREAKOUT -> room.setGameData(new BreakoutGame(n));
+            case CATCHMIND -> room.setGameData(new CatchMindGame(n));
         }
     }
 

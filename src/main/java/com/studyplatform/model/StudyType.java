@@ -7,5 +7,6 @@ public enum StudyType {
     TETRIS,
     OLDMAID,
     INCIDENT_AVOID,
-    BREAKOUT
+    BREAKOUT,
+    CATCHMIND
 }
