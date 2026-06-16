@@ -7,6 +7,7 @@ import com.studyplatform.model.*;
 import com.studyplatform.service.BaseballService;
 import com.studyplatform.service.BingoService;
 import com.studyplatform.service.BreakoutService;
+import com.studyplatform.service.CatchMindService;
 import com.studyplatform.service.IncidentAvoidService;
 import com.studyplatform.service.OmokService;
 import com.studyplatform.service.OldMaidService;
@@ -41,12 +42,13 @@ public class StudyController {
     private final TetrisService tetrisService;
     private final IncidentAvoidService incidentAvoidService;
     private final BreakoutService breakoutService;
+    private final CatchMindService catchMindService;
 
     public StudyController(SimpMessagingTemplate msg, RoomService roomService,
                            BaseballService baseballService, BingoService bingoService,
                            OmokService omokService, OldMaidService oldMaidService,
                            TetrisService tetrisService, IncidentAvoidService incidentAvoidService,
-                           BreakoutService breakoutService) {
+                           BreakoutService breakoutService, CatchMindService catchMindService) {
         this.msg             = msg;
         this.roomService     = roomService;
         this.baseballService = baseballService;
@@ -56,6 +58,7 @@ public class StudyController {
         this.tetrisService   = tetrisService;
         this.incidentAvoidService = incidentAvoidService;
         this.breakoutService = breakoutService;
+        this.catchMindService = catchMindService;
     }
 
     /** 방 입장 시 현재 상태 동기화 */
@@ -89,10 +92,13 @@ public class StudyController {
             state = tetrisService.buildInitialState(room);
         } else if (room.getStudyType() == StudyType.BREAKOUT) {
             state = breakoutService.buildInitialState(room);
+        } else if (room.getStudyType() == StudyType.CATCHMIND) {
+            state = catchMindService.buildInitialState(room);
         } else {
             state = incidentAvoidService.buildInitialState(room);
         }
         broadcast(roomId, state);
+        sendCatchMindSecret(room);
     }
 
     /**
@@ -153,6 +159,7 @@ public class StudyController {
             // 초기 게임 상태 브로드캐스트
             StudyStateResponse state = buildInitialState(room);
             broadcast(roomId, state);
+            sendCatchMindSecret(room);
             return;
         }
 
@@ -168,6 +175,7 @@ public class StudyController {
             }
             StudyStateResponse state = buildInitialState(room);
             broadcast(roomId, state);
+            sendCatchMindSecret(room);
             return;
         }
 
@@ -184,8 +192,10 @@ public class StudyController {
                 case TETRIS   -> tetrisService.processMove(room, player, request);
                 case INCIDENT_AVOID -> incidentAvoidService.processMove(room, player, request);
                 case BREAKOUT -> breakoutService.processMove(room, player, request);
+                case CATCHMIND -> catchMindService.processMove(room, player, request);
             };
             broadcast(roomId, response);
+            sendCatchMindSecret(room);
         } catch (IllegalArgumentException | IllegalStateException e) {
             broadcastError(roomId, room, e.getMessage());
         }
@@ -250,7 +260,19 @@ public class StudyController {
             case TETRIS   -> tetrisService.buildInitialState(room);
             case INCIDENT_AVOID -> incidentAvoidService.buildInitialState(room);
             case BREAKOUT -> breakoutService.buildInitialState(room);
+            case CATCHMIND -> catchMindService.buildInitialState(room);
         };
+    }
+
+    private void sendCatchMindSecret(Room room) {
+        if (room == null || room.getStudyType() != StudyType.CATCHMIND || room.getStatus() == StudyStatus.WAITING) {
+            return;
+        }
+        StudyStateResponse secret = catchMindService.buildSecretState(room);
+        int drawerIndex = secret.getCurrentTurn();
+        if (drawerIndex < 0 || drawerIndex >= room.getPlayers().size()) return;
+        String sessionId = room.getPlayers().get(drawerIndex).getSessionId();
+        msg.convertAndSend("/topic/study/" + room.getRoomId() + "/secret/" + sessionId, secret);
     }
 
     private void broadcastError(String roomId, String text) {
