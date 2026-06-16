@@ -9,6 +9,7 @@ import com.studyplatform.model.incident.IncidentAvoidGame;
 import com.studyplatform.model.omok.OmokGame;
 import com.studyplatform.model.oldmaid.OldMaidGame;
 import com.studyplatform.model.tetris.TetrisGame;
+import com.studyplatform.model.wordchain.WordChainGame;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -51,7 +52,8 @@ public class RoomService {
         // TETRIS=1명, OMOK=2명 고정, OLDMAID=2~7명, 나머지=2~6명
         room.setMaxPlayers(studyType == StudyType.TETRIS || studyType == StudyType.INCIDENT_AVOID || studyType == StudyType.BREAKOUT ? 3
                 : studyType == StudyType.OMOK    ? 2
-                : studyType == StudyType.OLDMAID ? Math.max(2, Math.min(7, maxPlayers))
+                : studyType == StudyType.OLDMAID    ? Math.max(2, Math.min(7, maxPlayers))
+                : studyType == StudyType.WORD_CHAIN ? Math.max(2, Math.min(6, maxPlayers))
                 : Math.max(2, Math.min(6, maxPlayers)));
         room.setDigits(digits);
         room.setBoardSize(studyType == StudyType.OMOK ? 19 : studyType == StudyType.TETRIS || studyType == StudyType.INCIDENT_AVOID || studyType == StudyType.BREAKOUT ? 20 : boardSize);
@@ -102,7 +104,8 @@ public class RoomService {
                           || room.getStudyType() == StudyType.INCIDENT_AVOID
                           || room.getStudyType() == StudyType.BREAKOUT
                           || room.getStudyType() == StudyType.CATCHMIND
-                          || room.getStudyType() == StudyType.OLDMAID;
+                          || room.getStudyType() == StudyType.OLDMAID
+                          || room.getStudyType() == StudyType.WORD_CHAIN;
         room.setStatus(directPlay ? StudyStatus.PLAYING : StudyStatus.SETUP);
     }
 
@@ -122,7 +125,8 @@ public class RoomService {
                           || room.getStudyType() == StudyType.INCIDENT_AVOID
                           || room.getStudyType() == StudyType.BREAKOUT
                           || room.getStudyType() == StudyType.CATCHMIND
-                          || room.getStudyType() == StudyType.OLDMAID;
+                          || room.getStudyType() == StudyType.OLDMAID
+                          || room.getStudyType() == StudyType.WORD_CHAIN;
         room.setStatus(directPlay ? StudyStatus.PLAYING : StudyStatus.SETUP);
     }
 
@@ -137,7 +141,8 @@ public class RoomService {
             case OLDMAID  -> room.setGameData(new OldMaidGame(n));
             case INCIDENT_AVOID -> room.setGameData(new IncidentAvoidGame(n));
             case BREAKOUT -> room.setGameData(new BreakoutGame(n));
-            case CATCHMIND -> room.setGameData(new CatchMindGame(n));
+            case CATCHMIND   -> room.setGameData(new CatchMindGame(n));
+            case WORD_CHAIN  -> room.setGameData(new WordChainGame(n, room.getDigits() > 0 ? room.getDigits() : 7));
         }
     }
 

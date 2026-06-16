@@ -8,5 +8,6 @@ public enum StudyType {
     OLDMAID,
     INCIDENT_AVOID,
     BREAKOUT,
-    CATCHMIND
+    CATCHMIND,
+    WORD_CHAIN
 }

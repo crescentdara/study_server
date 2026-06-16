@@ -8,6 +8,7 @@ import com.studyplatform.service.BaseballService;
 import com.studyplatform.service.BingoService;
 import com.studyplatform.service.BreakoutService;
 import com.studyplatform.service.CatchMindService;
+import com.studyplatform.service.WordChainService;
 import com.studyplatform.service.IncidentAvoidService;
 import com.studyplatform.service.OmokService;
 import com.studyplatform.service.OldMaidService;
@@ -43,12 +44,14 @@ public class StudyController {
     private final IncidentAvoidService incidentAvoidService;
     private final BreakoutService breakoutService;
     private final CatchMindService catchMindService;
+    private final WordChainService wordChainService;
 
     public StudyController(SimpMessagingTemplate msg, RoomService roomService,
                            BaseballService baseballService, BingoService bingoService,
                            OmokService omokService, OldMaidService oldMaidService,
                            TetrisService tetrisService, IncidentAvoidService incidentAvoidService,
-                           BreakoutService breakoutService, CatchMindService catchMindService) {
+                           BreakoutService breakoutService, CatchMindService catchMindService,
+                           WordChainService wordChainService) {
         this.msg             = msg;
         this.roomService     = roomService;
         this.baseballService = baseballService;
@@ -59,6 +62,7 @@ public class StudyController {
         this.incidentAvoidService = incidentAvoidService;
         this.breakoutService = breakoutService;
         this.catchMindService = catchMindService;
+        this.wordChainService = wordChainService;
     }
 
     /** 방 입장 시 현재 상태 동기화 */
@@ -94,6 +98,8 @@ public class StudyController {
             state = breakoutService.buildInitialState(room);
         } else if (room.getStudyType() == StudyType.CATCHMIND) {
             state = catchMindService.buildInitialState(room);
+        } else if (room.getStudyType() == StudyType.WORD_CHAIN) {
+            state = wordChainService.buildInitialState(room);
         } else {
             state = incidentAvoidService.buildInitialState(room);
         }
@@ -192,7 +198,8 @@ public class StudyController {
                 case TETRIS   -> tetrisService.processMove(room, player, request);
                 case INCIDENT_AVOID -> incidentAvoidService.processMove(room, player, request);
                 case BREAKOUT -> breakoutService.processMove(room, player, request);
-                case CATCHMIND -> catchMindService.processMove(room, player, request);
+                case CATCHMIND   -> catchMindService.processMove(room, player, request);
+                case WORD_CHAIN  -> wordChainService.processMove(room, player, request);
             };
             broadcast(roomId, response);
             sendCatchMindSecret(room);
@@ -260,7 +267,8 @@ public class StudyController {
             case TETRIS   -> tetrisService.buildInitialState(room);
             case INCIDENT_AVOID -> incidentAvoidService.buildInitialState(room);
             case BREAKOUT -> breakoutService.buildInitialState(room);
-            case CATCHMIND -> catchMindService.buildInitialState(room);
+            case CATCHMIND   -> catchMindService.buildInitialState(room);
+            case WORD_CHAIN  -> wordChainService.buildInitialState(room);
         };
     }
 
