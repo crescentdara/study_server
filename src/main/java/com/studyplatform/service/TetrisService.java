@@ -16,6 +16,7 @@ import java.util.Map;
 
 @Service
 public class TetrisService {
+    private static final int MAX_PROCESSED_ATTACK_KEYS = 500;
 
     public StudyStateResponse processMove(Room room, Player player, StudyMoveRequest request) {
         if (!"TETRIS_SYNC".equals(request.getMoveType())) {
@@ -94,6 +95,7 @@ public class TetrisService {
         int lastCleared = toInt(map.get("lastCleared"), 0);
         String attackKey = map.get("attackKey") instanceof String value ? value : "";
         if (attackKey.isBlank() || !game.getProcessedAttackKeys().add(attackKey)) return;
+        rememberAttackKey(game, attackKey);
 
         if (lastCleared < 2) {
             game.getComboCounts().put(playerIndex, 0);
@@ -121,6 +123,14 @@ public class TetrisService {
                             "combo", nextCombo,
                             "cleared", lastCleared
                     ));
+        }
+    }
+
+    private void rememberAttackKey(TetrisGame game, String attackKey) {
+        game.getProcessedAttackOrder().add(attackKey);
+        while (game.getProcessedAttackOrder().size() > MAX_PROCESSED_ATTACK_KEYS) {
+            String removed = game.getProcessedAttackOrder().remove(0);
+            game.getProcessedAttackKeys().remove(removed);
         }
     }
 
