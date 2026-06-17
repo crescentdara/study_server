@@ -76,7 +76,16 @@ public class TetrisService {
         state.setGameOver(toBoolean(map.get("gameOver"), state.isGameOver()));
         state.setUpdatedAt(System.currentTimeMillis());
 
+        ackAttacks(game, playerIndex, map);
         handleAttack(game, playerIndex, map);
+    }
+
+    private void ackAttacks(TetrisGame game, int playerIndex, Map<?, ?> map) {
+        Object ackAttackIds = map.get("ackAttackIds");
+        if (!(ackAttackIds instanceof List<?> ids) || ids.isEmpty()) return;
+        List<Map<String, Object>> queue = game.getGarbageQueues().get(playerIndex);
+        if (queue == null || queue.isEmpty()) return;
+        queue.removeIf(attack -> ids.contains(attack.get("attackId")));
     }
 
     private void handleAttack(TetrisGame game, int playerIndex, Map<?, ?> map) {
