@@ -43,6 +43,8 @@ public class TetrisService {
         gameData.put("cols", game.getCols());
         gameData.put("numPlayers", game.getNumPlayers());
         gameData.put("playerStates", game.getPlayerStates());
+        gameData.put("garbageQueues", game.getGarbageQueues());
+        gameData.put("comboCounts", game.getComboCounts());
 
         String[] names = room.getPlayers().stream().map(Player::getNickname).toArray(String[]::new);
         return StudyStateResponse.builder()
@@ -73,6 +75,64 @@ public class TetrisService {
         state.setRunning(toBoolean(map.get("running"), state.isRunning()));
         state.setGameOver(toBoolean(map.get("gameOver"), state.isGameOver()));
         state.setUpdatedAt(System.currentTimeMillis());
+
+        ackAttacks(game, playerIndex, map);
+        handleAttack(game, playerIndex, map);
+    }
+
+    private void ackAttacks(TetrisGame game, int playerIndex, Map<?, ?> map) {
+        Object ackAttackIds = map.get("ackAttackIds");
+        if (!(ackAttackIds instanceof List<?> ids) || ids.isEmpty()) return;
+        List<Map<String, Object>> queue = game.getGarbageQueues().get(playerIndex);
+        if (queue == null || queue.isEmpty()) return;
+        queue.removeIf(attack -> ids.contains(attack.get("attackId")));
+    }
+
+    private void handleAttack(TetrisGame game, int playerIndex, Map<?, ?> map) {
+        TetrisPlayerState attackerState = game.getPlayerStates().get(playerIndex);
+        if (attackerState == null || attackerState.isGameOver()) return;
+        int lastCleared = toInt(map.get("lastCleared"), 0);
+        String attackKey = map.get("attackKey") instanceof String value ? value : "";
+        if (attackKey.isBlank() || !game.getProcessedAttackKeys().add(attackKey)) return;
+
+        if (lastCleared < 2) {
+            game.getComboCounts().put(playerIndex, 0);
+            return;
+        }
+
+        int nextCombo = game.getComboCounts().getOrDefault(playerIndex, 0) + 1;
+        game.getComboCounts().put(playerIndex, nextCombo);
+        int attackLines = attackLines(lastCleared, nextCombo);
+        if (attackLines <= 0) return;
+
+        List<Integer> aliveTargets = game.getPlayerStates().entrySet().stream()
+                .filter(entry -> entry.getKey() != playerIndex)
+                .filter(entry -> !entry.getValue().isGameOver())
+                .map(Map.Entry::getKey)
+                .toList();
+
+        for (int target : aliveTargets) {
+            game.getGarbageQueues()
+                    .computeIfAbsent(target, ignored -> new java.util.concurrent.CopyOnWriteArrayList<>())
+                    .add(Map.of(
+                            "attackId", attackKey + ":" + target,
+                            "from", playerIndex,
+                            "lines", attackLines,
+                            "combo", nextCombo,
+                            "cleared", lastCleared
+                    ));
+        }
+    }
+
+    private int attackLines(int cleared, int combo) {
+        int base = switch (cleared) {
+            case 2 -> 1;
+            case 3 -> 2;
+            case 4 -> 4;
+            default -> 0;
+        };
+        int comboBonus = Math.min(3, Math.max(0, combo - 1));
+        return base + comboBonus;
     }
 
     private void updateWinner(Room room, TetrisGame game, int playerIndex) {
