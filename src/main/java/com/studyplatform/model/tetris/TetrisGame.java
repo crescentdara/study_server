@@ -17,6 +17,7 @@ public class TetrisGame {
     private final Map<Integer, List<Map<String, Object>>> garbageQueues = new ConcurrentHashMap<>();
     private final Map<Integer, Integer> comboCounts = new ConcurrentHashMap<>();
     private final Set<String> processedAttackKeys = ConcurrentHashMap.newKeySet();
+    private final List<String> processedAttackOrder = new CopyOnWriteArrayList<>();
     private int winner = -1;
 
     public TetrisGame(int numPlayers) {
