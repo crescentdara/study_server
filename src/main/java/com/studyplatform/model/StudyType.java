@@ -9,5 +9,7 @@ public enum StudyType {
     INCIDENT_AVOID,
     BREAKOUT,
     CATCHMIND,
-    WORD_CHAIN
+    WORD_CHAIN,
+    RUMMIKUB,
+    DAVINCI_CODE
 }

@@ -105,9 +105,13 @@ public class RoomService {
                           || room.getStudyType() == StudyType.BREAKOUT
                           || room.getStudyType() == StudyType.CATCHMIND
                           || room.getStudyType() == StudyType.OLDMAID
-                          || room.getStudyType() == StudyType.WORD_CHAIN;
+                          || room.getStudyType() == StudyType.WORD_CHAIN
+                          || room.getStudyType() == StudyType.RUMMIKUB
+                          || room.getStudyType() == StudyType.DAVINCI_CODE;
         room.setStatus(directPlay ? StudyStatus.PLAYING : StudyStatus.SETUP);
     }
+
+
 
     /**
      * 게임 재시작 (방장 전용, FINISHED 상태에서만 가능)
@@ -126,7 +130,8 @@ public class RoomService {
                           || room.getStudyType() == StudyType.BREAKOUT
                           || room.getStudyType() == StudyType.CATCHMIND
                           || room.getStudyType() == StudyType.OLDMAID
-                          || room.getStudyType() == StudyType.WORD_CHAIN;
+                          || room.getStudyType() == StudyType.WORD_CHAIN
+                          || room.getStudyType() == StudyType.RUMMIKUB;
         room.setStatus(directPlay ? StudyStatus.PLAYING : StudyStatus.SETUP);
     }
 
@@ -143,6 +148,8 @@ public class RoomService {
             case BREAKOUT -> room.setGameData(new BreakoutGame(n));
             case CATCHMIND   -> room.setGameData(new CatchMindGame(n));
             case WORD_CHAIN  -> room.setGameData(new WordChainGame(n, room.getDigits() > 0 ? room.getDigits() : 7));
+            case RUMMIKUB    -> room.setGameData(new com.studyplatform.model.rummikub.RummikubGame(n));
+            case DAVINCI_CODE -> room.setGameData(new com.studyplatform.model.davinci.DaVinciGame(n));
         }
     }
 

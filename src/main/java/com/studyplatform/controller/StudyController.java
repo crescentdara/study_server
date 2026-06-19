@@ -9,6 +9,8 @@ import com.studyplatform.service.BingoService;
 import com.studyplatform.service.BreakoutService;
 import com.studyplatform.service.CatchMindService;
 import com.studyplatform.service.WordChainService;
+import com.studyplatform.service.RummikubService;
+import com.studyplatform.service.DaVinciService;
 import com.studyplatform.service.IncidentAvoidService;
 import com.studyplatform.service.OmokService;
 import com.studyplatform.service.OldMaidService;
@@ -45,13 +47,16 @@ public class StudyController {
     private final BreakoutService breakoutService;
     private final CatchMindService catchMindService;
     private final WordChainService wordChainService;
+    private final RummikubService rummikubService;
+    private final DaVinciService daVinciService;
 
     public StudyController(SimpMessagingTemplate msg, RoomService roomService,
                            BaseballService baseballService, BingoService bingoService,
                            OmokService omokService, OldMaidService oldMaidService,
                            TetrisService tetrisService, IncidentAvoidService incidentAvoidService,
                            BreakoutService breakoutService, CatchMindService catchMindService,
-                           WordChainService wordChainService) {
+                           WordChainService wordChainService, RummikubService rummikubService,
+                           DaVinciService daVinciService) {
         this.msg             = msg;
         this.roomService     = roomService;
         this.baseballService = baseballService;
@@ -63,6 +68,8 @@ public class StudyController {
         this.breakoutService = breakoutService;
         this.catchMindService = catchMindService;
         this.wordChainService = wordChainService;
+        this.rummikubService  = rummikubService;
+        this.daVinciService   = daVinciService;
     }
 
     /** 방 입장 시 현재 상태 동기화 */
@@ -100,6 +107,10 @@ public class StudyController {
             state = catchMindService.buildInitialState(room);
         } else if (room.getStudyType() == StudyType.WORD_CHAIN) {
             state = wordChainService.buildInitialState(room);
+        } else if (room.getStudyType() == StudyType.RUMMIKUB) {
+            state = rummikubService.buildInitialState(room);
+        } else if (room.getStudyType() == StudyType.DAVINCI_CODE) {
+            state = daVinciService.buildInitialState(room);
         } else {
             state = incidentAvoidService.buildInitialState(room);
         }
@@ -200,6 +211,8 @@ public class StudyController {
                 case BREAKOUT -> breakoutService.processMove(room, player, request);
                 case CATCHMIND   -> catchMindService.processMove(room, player, request);
                 case WORD_CHAIN  -> wordChainService.processMove(room, player, request);
+                case RUMMIKUB    -> rummikubService.processMove(room, player, request);
+                case DAVINCI_CODE -> daVinciService.processMove(room, player, request);
             };
             broadcast(roomId, response);
             sendCatchMindSecret(room);
@@ -269,6 +282,8 @@ public class StudyController {
             case BREAKOUT -> breakoutService.buildInitialState(room);
             case CATCHMIND   -> catchMindService.buildInitialState(room);
             case WORD_CHAIN  -> wordChainService.buildInitialState(room);
+            case RUMMIKUB    -> rummikubService.buildInitialState(room);
+            case DAVINCI_CODE -> daVinciService.buildInitialState(room);
         };
     }
 
