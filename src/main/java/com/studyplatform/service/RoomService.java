@@ -116,8 +116,10 @@ public class RoomService {
      * 방을 나가거나 새로 만들 필요 없이 같은 방에서 다시 플레이 가능합니다.
      */
     public void restartGame(Room room) {
-        if (room.getStatus() != StudyStatus.FINISHED)
+        if (room.getStatus() != StudyStatus.FINISHED && room.getStudyType() != StudyType.TETRIS)
             throw new RuntimeException("Game is not finished yet.");
+        if (room.getStatus() == StudyStatus.WAITING)
+            throw new RuntimeException("Game has not started yet.");
 
         initGameData(room);         // 새 게임 데이터 생성
         boolean directPlay = room.getStudyType() == StudyType.OMOK
