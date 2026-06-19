@@ -5,6 +5,7 @@ import lombok.Data;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -18,7 +19,9 @@ public class TetrisGame {
     private final Map<Integer, Integer> comboCounts = new ConcurrentHashMap<>();
     private final Set<String> processedAttackKeys = ConcurrentHashMap.newKeySet();
     private final List<String> processedAttackOrder = new CopyOnWriteArrayList<>();
+    private final String instanceId = UUID.randomUUID().toString();
     private int winner = -1;
+    private boolean paused = false;
 
     public TetrisGame(int numPlayers) {
         this.numPlayers = numPlayers;
