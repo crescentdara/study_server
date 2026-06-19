@@ -19,13 +19,17 @@ public class TetrisService {
     private static final int MAX_PROCESSED_ATTACK_KEYS = 500;
 
     public StudyStateResponse processMove(Room room, Player player, StudyMoveRequest request) {
-        if (!"TETRIS_SYNC".equals(request.getMoveType())) {
+        if (!"TETRIS_SYNC".equals(request.getMoveType()) && !"TETRIS_PAUSE".equals(request.getMoveType())) {
             throw new IllegalArgumentException("Unknown TETRIS move.");
         }
         TetrisGame game = (TetrisGame) room.getGameData();
         if (game == null) {
             game = new TetrisGame(room.getPlayers().size());
             room.setGameData(game);
+        }
+        if ("TETRIS_PAUSE".equals(request.getMoveType())) {
+            game.setPaused(readPaused(request.getPayload(), !game.isPaused()));
+            return buildInitialState(room);
         }
         syncState(game, player.getPlayerIndex(), request.getPayload());
         updateWinner(room, game, player.getPlayerIndex());
@@ -43,9 +47,11 @@ public class TetrisService {
         gameData.put("rows", game.getRows());
         gameData.put("cols", game.getCols());
         gameData.put("numPlayers", game.getNumPlayers());
+        gameData.put("instanceId", game.getInstanceId());
         gameData.put("playerStates", game.getPlayerStates());
         gameData.put("garbageQueues", game.getGarbageQueues());
         gameData.put("comboCounts", game.getComboCounts());
+        gameData.put("paused", game.isPaused());
 
         String[] names = room.getPlayers().stream().map(Player::getNickname).toArray(String[]::new);
         return StudyStateResponse.builder()
@@ -97,7 +103,7 @@ public class TetrisService {
         if (attackKey.isBlank() || !game.getProcessedAttackKeys().add(attackKey)) return;
         rememberAttackKey(game, attackKey);
 
-        if (lastCleared < 2) {
+        if (lastCleared <= 0) {
             game.getComboCounts().put(playerIndex, 0);
             return;
         }
@@ -136,12 +142,13 @@ public class TetrisService {
 
     private int attackLines(int cleared, int combo) {
         int base = switch (cleared) {
+            case 1 -> 0;
             case 2 -> 1;
             case 3 -> 2;
             case 4 -> 4;
             default -> 0;
         };
-        int comboBonus = Math.min(3, Math.max(0, combo - 1));
+        int comboBonus = Math.min(4, Math.max(0, combo - 1));
         return base + comboBonus;
     }
 
@@ -168,6 +175,13 @@ public class TetrisService {
 
     private boolean toBoolean(Object value, boolean fallback) {
         if (value instanceof Boolean bool) return bool;
+        return fallback;
+    }
+
+    private boolean readPaused(Object payload, boolean fallback) {
+        if (payload instanceof Map<?, ?> map) {
+            return toBoolean(map.get("paused"), fallback);
+        }
         return fallback;
     }
 }
