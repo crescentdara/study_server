@@ -48,11 +48,12 @@ public class RoomService {
                            String nickname, String sessionId,
                            int maxPlayers, int digits, int boardSize) {
         Room room = new Room(roomName, studyType);
-        room.setMaxPlayers(studyType == StudyType.TETRIS || studyType == StudyType.INCIDENT_AVOID || studyType == StudyType.BREAKOUT ? 3 : studyType == StudyType.OMOK ? 2 : Math.max(2, Math.min(6, maxPlayers)));
-        // TETRIS=1명, OMOK=2명 고정, OLDMAID=2~7명, 나머지=2~6명
+        // TETRIS/INCIDENT_AVOID/BREAKOUT=3명 고정, OMOK=2명 고정, RUSH_HOUR=1~3명, OLDMAID=2~7명, 나머지=2~6명
         room.setMaxPlayers(studyType == StudyType.TETRIS || studyType == StudyType.INCIDENT_AVOID || studyType == StudyType.BREAKOUT ? 3
-                : studyType == StudyType.OMOK    ? 2
-                : studyType == StudyType.OLDMAID    ? Math.max(2, Math.min(7, maxPlayers))
+                : studyType == StudyType.OMOK      ? 2
+                : studyType == StudyType.RUSH_HOUR ? Math.max(1, Math.min(3, maxPlayers))
+                : studyType == StudyType.UBONGO    ? Math.max(1, Math.min(3, maxPlayers))
+                : studyType == StudyType.OLDMAID   ? Math.max(2, Math.min(7, maxPlayers))
                 : studyType == StudyType.WORD_CHAIN ? Math.max(2, Math.min(6, maxPlayers))
                 : Math.max(2, Math.min(6, maxPlayers)));
         room.setDigits(digits);
@@ -92,7 +93,7 @@ public class RoomService {
      * @throws RuntimeException 2명 미만이거나 이미 시작된 경우
      */
     public void startGame(Room room) {
-        if (room.getStudyType() != StudyType.TETRIS && room.getStudyType() != StudyType.INCIDENT_AVOID && room.getStudyType() != StudyType.BREAKOUT && room.getPlayers().size() < 2)
+        if (room.getStudyType() != StudyType.TETRIS && room.getStudyType() != StudyType.INCIDENT_AVOID && room.getStudyType() != StudyType.BREAKOUT && room.getStudyType() != StudyType.RUSH_HOUR && room.getStudyType() != StudyType.UBONGO && room.getPlayers().size() < 2)
             throw new RuntimeException("Need at least 2 players to start.");
         if (room.getStatus() != StudyStatus.WAITING)
             throw new RuntimeException("Game already started.");
@@ -107,7 +108,8 @@ public class RoomService {
                           || room.getStudyType() == StudyType.OLDMAID
                           || room.getStudyType() == StudyType.WORD_CHAIN
                           || room.getStudyType() == StudyType.RUMMIKUB
-                          || room.getStudyType() == StudyType.DAVINCI_CODE;
+                          || room.getStudyType() == StudyType.DAVINCI_CODE
+                          || room.getStudyType() == StudyType.UBONGO;
         room.setStatus(directPlay ? StudyStatus.PLAYING : StudyStatus.SETUP);
     }
 
@@ -133,7 +135,9 @@ public class RoomService {
                           || room.getStudyType() == StudyType.CATCHMIND
                           || room.getStudyType() == StudyType.OLDMAID
                           || room.getStudyType() == StudyType.WORD_CHAIN
-                          || room.getStudyType() == StudyType.RUMMIKUB;
+                          || room.getStudyType() == StudyType.RUMMIKUB
+                          || room.getStudyType() == StudyType.RUSH_HOUR
+                          || room.getStudyType() == StudyType.UBONGO;
         room.setStatus(directPlay ? StudyStatus.PLAYING : StudyStatus.SETUP);
     }
 
@@ -152,6 +156,8 @@ public class RoomService {
             case WORD_CHAIN  -> room.setGameData(new WordChainGame(n, room.getDigits() > 0 ? room.getDigits() : 7));
             case RUMMIKUB    -> room.setGameData(new com.studyplatform.model.rummikub.RummikubGame(n));
             case DAVINCI_CODE -> room.setGameData(new com.studyplatform.model.davinci.DaVinciGame(n));
+            case RUSH_HOUR   -> room.setGameData(new com.studyplatform.model.rushhour.RushHourGame(n));
+            case UBONGO      -> room.setGameData(new com.studyplatform.model.ubongo.UbongoGame(n));
         }
     }
 

@@ -11,5 +11,7 @@ public enum StudyType {
     CATCHMIND,
     WORD_CHAIN,
     RUMMIKUB,
-    DAVINCI_CODE
+    DAVINCI_CODE,
+    RUSH_HOUR,
+    UBONGO
 }
