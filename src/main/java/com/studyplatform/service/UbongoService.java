@@ -42,10 +42,8 @@ public class UbongoService {
                 String err = game.placePiece(pi, pieceId, row, col, orientIdx);
                 if (err != null) return buildState(room, game, "ERROR: " + err);
 
-                if (game.getWinner() >= 0) {
+                if (game.getWinner() >= 0 && room.getStatus() != StudyStatus.FINISHED) {
                     room.setStatus(StudyStatus.FINISHED);
-                    String winner = room.getPlayers().get(game.getWinner()).getNickname();
-                    return buildState(room, game, winner + " 클리어!");
                 }
                 return buildState(room, game, "");
             }
@@ -140,6 +138,7 @@ public class UbongoService {
         }
         data.put("playerStates", states);
         data.put("winner", game.getWinner());
+        data.put("startTime", game.getStartTime());
 
         return data;
     }

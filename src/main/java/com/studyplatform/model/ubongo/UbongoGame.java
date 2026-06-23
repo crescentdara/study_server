@@ -49,7 +49,6 @@ public class UbongoGame {
     public String placePiece(int playerIndex, String pieceId, int row, int col, int orientIdx) {
         if (playerIndex < 0 || playerIndex >= numPlayers) return "Invalid player";
         UbongoPlayerState state = playerStates.get(playerIndex);
-        if (state.isSolved()) return "Already solved";
 
         String err = state.place(pieceId, row, col, orientIdx, puzzle);
         if (err != null) return err;

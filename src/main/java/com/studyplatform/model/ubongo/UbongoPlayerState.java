@@ -50,7 +50,11 @@ public class UbongoPlayerState {
 
     // ── Remove ────────────────────────────────────────────────────────────────
 
-    public boolean remove(String pieceId) { return placements.remove(pieceId) != null; }
+    public boolean remove(String pieceId) {
+        boolean removed = placements.remove(pieceId) != null;
+        if (removed) solved = false;  // allow re-placement after partial removal
+        return removed;
+    }
 
     // ── Solve check ───────────────────────────────────────────────────────────
 
