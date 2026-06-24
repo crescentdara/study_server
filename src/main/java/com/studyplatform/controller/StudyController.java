@@ -17,11 +17,13 @@ import com.studyplatform.service.IncidentAvoidService;
 import com.studyplatform.service.OmokService;
 import com.studyplatform.service.OldMaidService;
 import com.studyplatform.service.RoomService;
+import com.studyplatform.service.SessionRegistry;
 import com.studyplatform.service.TetrisService;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
 import org.springframework.stereotype.Controller;
 
 /**
@@ -40,6 +42,7 @@ public class StudyController {
 
     private final SimpMessagingTemplate msg;
     private final RoomService roomService;
+    private final SessionRegistry sessionRegistry;
     private final BaseballService baseballService;
     private final BingoService bingoService;
     private final OmokService omokService;
@@ -55,6 +58,7 @@ public class StudyController {
     private final UbongoService   ubongoService;
 
     public StudyController(SimpMessagingTemplate msg, RoomService roomService,
+                           SessionRegistry sessionRegistry,
                            BaseballService baseballService, BingoService bingoService,
                            OmokService omokService, OldMaidService oldMaidService,
                            TetrisService tetrisService, IncidentAvoidService incidentAvoidService,
@@ -64,6 +68,7 @@ public class StudyController {
                            UbongoService ubongoService) {
         this.msg             = msg;
         this.roomService     = roomService;
+        this.sessionRegistry = sessionRegistry;
         this.baseballService = baseballService;
         this.bingoService    = bingoService;
         this.omokService     = omokService;
@@ -82,9 +87,16 @@ public class StudyController {
     /** 방 입장 시 현재 상태 동기화 */
     @MessageMapping("/study/{roomId}/enter")
     public void enterRoom(@DestinationVariable String roomId,
-                          @Payload StudyMoveRequest request) {
+                          @Payload StudyMoveRequest request,
+                          SimpMessageHeaderAccessor headerAccessor) {
         Room room = roomService.getRoom(roomId);
         if (room == null) return;
+
+        // WebSocket 세션 ID → 앱 세션 ID 매핑 등록 (연결 끊김 감지에 사용)
+        String wsSessionId = headerAccessor.getSessionId();
+        if (wsSessionId != null && request.getSessionId() != null) {
+            sessionRegistry.register(wsSessionId, roomId, request.getSessionId());
+        }
 
         StudyStateResponse state;
         if (room.getStatus() == StudyStatus.WAITING) {

@@ -1,5 +1,5 @@
 # 서버 포트
-server.port=9090
+server.port=20124
 
 # 로그 레벨 (개발: DEBUG, 운영: INFO)
 logging.level.com.studyplatform=DEBUG
