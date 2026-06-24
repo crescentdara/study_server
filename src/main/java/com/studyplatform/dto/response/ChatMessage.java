@@ -24,4 +24,5 @@ public class ChatMessage {
     private String imageUrl;
     private String fileName;
     private Long fileSize;
+    private String mentionedNickname; // set when message starts with @nickname
 }

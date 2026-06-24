@@ -277,7 +277,17 @@ public class StudyController {
         }
 
         if (text == null || text.trim().isEmpty()) return null;
-        return new ChatMessage(nickname, text.trim(), System.currentTimeMillis(), emoji);
+        ChatMessage msg = new ChatMessage(nickname, text.trim(), System.currentTimeMillis(), emoji);
+
+        // Detect @mention: message starts with @nickname (followed by space or end)
+        String trimmed = text.trim();
+        if (trimmed.startsWith("@")) {
+            int spaceIdx = trimmed.indexOf(' ');
+            String mentioned = spaceIdx > 0 ? trimmed.substring(1, spaceIdx) : trimmed.substring(1);
+            if (!mentioned.isEmpty()) msg.setMentionedNickname(mentioned);
+        }
+
+        return msg;
     }
 
     private void broadcast(String roomId, StudyStateResponse response) {
