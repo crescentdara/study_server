@@ -44,6 +44,8 @@ public class UbongoService {
 
                 if (game.getWinner() >= 0 && room.getStatus() != StudyStatus.FINISHED) {
                     room.setStatus(StudyStatus.FINISHED);
+                    String winnerName = room.getPlayers().get(game.getWinner()).getNickname();
+                    return buildState(room, game, winnerName + " 우승!");
                 }
                 return buildState(room, game, "");
             }

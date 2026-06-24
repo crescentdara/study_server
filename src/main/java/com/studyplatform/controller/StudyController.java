@@ -208,7 +208,9 @@ public class StudyController {
         }
 
         // ── 일반 게임 액션 (SET_SECRET / GUESS / SET_BOARD / CALL_TOPIC) ──
-        if (room.getStatus() == StudyStatus.FINISHED) { broadcastError(roomId, "Game already finished."); return; }
+        // Ubongo: players continue independently even after someone wins
+        boolean isUbongoMove = "UBONGO_PLACE".equals(moveType) || "UBONGO_REMOVE".equals(moveType);
+        if (room.getStatus() == StudyStatus.FINISHED && !isUbongoMove) { broadcastError(roomId, "Game already finished."); return; }
         if (room.getStatus() == StudyStatus.WAITING)  { broadcastError(roomId, "Game has not started yet."); return; }
 
         try {
