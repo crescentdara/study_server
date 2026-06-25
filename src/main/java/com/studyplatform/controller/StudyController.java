@@ -299,6 +299,16 @@ public class StudyController {
             int spaceIdx = trimmed.indexOf(' ');
             String mentioned = spaceIdx > 0 ? trimmed.substring(1, spaceIdx) : trimmed.substring(1);
             if (!mentioned.isEmpty()) msg.setMentionedNickname(mentioned);
+            if (spaceIdx > 0) {
+                String rest = trimmed.substring(spaceIdx + 1).trim();
+                if (rest.startsWith("/voice")) {
+                    String voiceText = rest.substring("/voice".length()).trim();
+                    if (!voiceText.isEmpty()) {
+                        msg.setVoiceRequested(true);
+                        msg.setVoiceText(voiceText.length() > 80 ? voiceText.substring(0, 80) : voiceText);
+                    }
+                }
+            }
         }
 
         return msg;

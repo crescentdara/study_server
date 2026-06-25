@@ -25,4 +25,6 @@ public class ChatMessage {
     private String fileName;
     private Long fileSize;
     private String mentionedNickname; // set when message starts with @nickname
+    private boolean voiceRequested;
+    private String voiceText;
 }
