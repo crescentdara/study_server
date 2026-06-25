@@ -17,6 +17,7 @@ import java.util.Map;
 @Service
 public class TetrisService {
     private static final int MAX_PROCESSED_ATTACK_KEYS = 500;
+    private static final int MAX_ATTACK_LOG = 20;
 
     public StudyStateResponse processMove(Room room, Player player, StudyMoveRequest request) {
         if (!"TETRIS_SYNC".equals(request.getMoveType()) && !"TETRIS_PAUSE".equals(request.getMoveType())) {
@@ -51,6 +52,8 @@ public class TetrisService {
         gameData.put("playerStates", game.getPlayerStates());
         gameData.put("garbageQueues", game.getGarbageQueues());
         gameData.put("comboCounts", game.getComboCounts());
+        gameData.put("lastAttackers", game.getLastAttackers());
+        gameData.put("attackLog", game.getAttackLog());
         gameData.put("paused", game.isPaused());
 
         String[] names = room.getPlayers().stream().map(Player::getNickname).toArray(String[]::new);
@@ -117,19 +120,43 @@ public class TetrisService {
                 .filter(entry -> entry.getKey() != playerIndex)
                 .filter(entry -> !entry.getValue().isGameOver())
                 .map(Map.Entry::getKey)
+                .sorted()
                 .toList();
+        if (aliveTargets.isEmpty()) return;
 
-        for (int target : aliveTargets) {
-            game.getGarbageQueues()
-                    .computeIfAbsent(target, ignored -> new java.util.concurrent.CopyOnWriteArrayList<>())
-                    .add(Map.of(
-                            "attackId", attackKey + ":" + target,
-                            "from", playerIndex,
-                            "lines", attackLines,
-                            "combo", nextCombo,
-                            "cleared", lastCleared
-                    ));
+        int target = selectTarget(game, playerIndex, aliveTargets);
+        String targetAttackId = attackKey + ":" + target;
+        game.getGarbageQueues()
+                .computeIfAbsent(target, ignored -> new java.util.concurrent.CopyOnWriteArrayList<>())
+                .add(Map.of(
+                        "attackId", targetAttackId,
+                        "from", playerIndex,
+                        "lines", attackLines,
+                        "combo", nextCombo,
+                        "cleared", lastCleared
+                ));
+        game.getLastAttackers().put(target, playerIndex);
+        rememberAttackLog(game, Map.of(
+                "attackId", targetAttackId,
+                "from", playerIndex,
+                "to", target,
+                "lines", attackLines,
+                "combo", nextCombo,
+                "cleared", lastCleared,
+                "timestamp", System.currentTimeMillis()
+        ));
+    }
+
+    private int selectTarget(TetrisGame game, int playerIndex, List<Integer> aliveTargets) {
+        int lastAttacker = game.getLastAttackers().getOrDefault(playerIndex, -1);
+        if (aliveTargets.contains(lastAttacker)) {
+            return lastAttacker;
         }
+
+        int cursor = game.getTargetCursors().getOrDefault(playerIndex, 0);
+        int target = aliveTargets.get(Math.floorMod(cursor, aliveTargets.size()));
+        game.getTargetCursors().put(playerIndex, cursor + 1);
+        return target;
     }
 
     private void rememberAttackKey(TetrisGame game, String attackKey) {
@@ -137,6 +164,13 @@ public class TetrisService {
         while (game.getProcessedAttackOrder().size() > MAX_PROCESSED_ATTACK_KEYS) {
             String removed = game.getProcessedAttackOrder().remove(0);
             game.getProcessedAttackKeys().remove(removed);
+        }
+    }
+
+    private void rememberAttackLog(TetrisGame game, Map<String, Object> log) {
+        game.getAttackLog().add(log);
+        while (game.getAttackLog().size() > MAX_ATTACK_LOG) {
+            game.getAttackLog().remove(0);
         }
     }
 
