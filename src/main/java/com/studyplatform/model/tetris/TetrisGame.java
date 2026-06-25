@@ -17,6 +17,9 @@ public class TetrisGame {
     private final Map<Integer, TetrisPlayerState> playerStates = new ConcurrentHashMap<>();
     private final Map<Integer, List<Map<String, Object>>> garbageQueues = new ConcurrentHashMap<>();
     private final Map<Integer, Integer> comboCounts = new ConcurrentHashMap<>();
+    private final Map<Integer, Integer> lastAttackers = new ConcurrentHashMap<>();
+    private final Map<Integer, Integer> targetCursors = new ConcurrentHashMap<>();
+    private final List<Map<String, Object>> attackLog = new CopyOnWriteArrayList<>();
     private final Set<String> processedAttackKeys = ConcurrentHashMap.newKeySet();
     private final List<String> processedAttackOrder = new CopyOnWriteArrayList<>();
     private final String instanceId = UUID.randomUUID().toString();
@@ -29,6 +32,8 @@ public class TetrisGame {
             playerStates.put(i, new TetrisPlayerState());
             garbageQueues.put(i, new CopyOnWriteArrayList<>());
             comboCounts.put(i, 0);
+            lastAttackers.put(i, -1);
+            targetCursors.put(i, 0);
         }
     }
 }
