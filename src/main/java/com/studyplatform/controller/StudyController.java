@@ -189,12 +189,12 @@ public class StudyController {
         // ── 게임 시작 (방장 전용) ──────────────────────────────────────
         if ("START_GAME".equals(moveType)) {
             if (player.getPlayerIndex() != 0) {
-                broadcastError(roomId, "Only the host can start the game."); return;
+                broadcastError(roomId, room, "Only the host can start the game."); return;
             }
             try {
                 roomService.startGame(room); // WAITING → SETUP, 게임 데이터 초기화
             } catch (RuntimeException e) {
-                broadcastError(roomId, e.getMessage()); return;
+                broadcastError(roomId, room, e.getMessage()); return;
             }
             // 초기 게임 상태 브로드캐스트
             StudyStateResponse state = buildInitialState(room);
@@ -206,12 +206,12 @@ public class StudyController {
         // ── 재시작 (방장 전용) ────────────────────────────────────────
         if ("RESTART".equals(moveType)) {
             if (player.getPlayerIndex() != 0) {
-                broadcastError(roomId, "Only the host can restart."); return;
+                broadcastError(roomId, room, "Only the host can restart."); return;
             }
             try {
                 roomService.restartGame(room); // FINISHED → SETUP, 게임 데이터 초기화
             } catch (RuntimeException e) {
-                broadcastError(roomId, e.getMessage()); return;
+                broadcastError(roomId, room, e.getMessage()); return;
             }
             StudyStateResponse state = buildInitialState(room);
             broadcast(roomId, state);

@@ -26,6 +26,7 @@ public class UbongoPlayerState {
      * Returns null on success, or an error message on failure.
      */
     public String place(String pieceId, int row, int col, int orientIdx, PuzzleCard puzzle) {
+        if (solved) return "Player already solved";
         UbongoPiece piece = UbongoPiece.get(pieceId);
         if (piece == null)                           return "Unknown piece: " + pieceId;
         if (!puzzle.getPieceIds().contains(pieceId)) return "Piece not in puzzle";
@@ -51,6 +52,7 @@ public class UbongoPlayerState {
     // ── Remove ────────────────────────────────────────────────────────────────
 
     public boolean remove(String pieceId) {
+        if (solved) return false;
         boolean removed = placements.remove(pieceId) != null;
         if (removed) solved = false;  // allow re-placement after partial removal
         return removed;
@@ -64,7 +66,14 @@ public class UbongoPlayerState {
      * N pieces are placed they exactly cover all N*B - blocked cells.
      */
     public boolean checkSolved(PuzzleCard puzzle) {
-        return placements.size() == puzzle.getPieceIds().size();
+        if (placements.size() != puzzle.getPieceIds().size()) return false;
+        boolean[][] occupied = buildOccupied(puzzle.getBlocked());
+        for (int r = 0; r < 5; r += 1) {
+            for (int c = 0; c < 5; c += 1) {
+                if (!occupied[r][c]) return false;
+            }
+        }
+        return true;
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

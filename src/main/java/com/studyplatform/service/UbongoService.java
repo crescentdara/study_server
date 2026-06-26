@@ -24,7 +24,7 @@ public class UbongoService {
 
     public StudyStateResponse processMove(Room room, Player player, StudyMoveRequest req) {
         UbongoGame game = getOrInit(room);
-        int pi = room.getPlayers().indexOf(player);
+        int pi = player.getPlayerIndex();
 
         switch (req.getMoveType() == null ? "" : req.getMoveType()) {
 
@@ -57,7 +57,8 @@ public class UbongoService {
                 catch (Exception e) { return buildState(room, game, "ERROR: Invalid payload"); }
 
                 String pieceId = (String) p.get("pieceId");
-                game.removePiece(pi, pieceId);
+                String err = game.removePiece(pi, pieceId);
+                if (err != null) return buildState(room, game, "ERROR: " + err);
                 return buildState(room, game, "");
             }
 
