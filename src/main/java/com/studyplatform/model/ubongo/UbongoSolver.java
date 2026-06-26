@@ -38,6 +38,7 @@ public class UbongoSolver {
         Random rng = new Random();
         List<String> allIds = UbongoPiece.allIds();
         List<PuzzleCard> result = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
 
         for (int attempt = 0; attempt < maxTries && result.size() < count; attempt++) {
             // ── Pick pieces greedily so the total fits in N*N cells ────────
@@ -50,6 +51,8 @@ public class UbongoSolver {
 
             // ── Randomly place blocked cells in remaining space ────────────
             int numBlocked = N * N - totalCells;
+            if (numBlocked < 2) continue;
+
             List<Integer> positions = new ArrayList<>();
             for (int i = 0; i < N * N; i++) positions.add(i);
             Collections.shuffle(positions, rng);
@@ -61,7 +64,11 @@ public class UbongoSolver {
             }
 
             // ── Validate with BFS solver ───────────────────────────────────
+            String signature = signature(blocked, chosen);
+            if (seen.contains(signature)) continue;
+
             if (canSolve(blocked, chosen)) {
+                seen.add(signature);
                 result.add(new PuzzleCard(blocked, new ArrayList<>(chosen)));
                 System.out.printf("[Ubongo] Puzzle %d/%d ready (%d pieces, %d open cells)%n",
                         result.size(), count, chosen.size(), totalCells);
@@ -87,6 +94,16 @@ public class UbongoSolver {
             if (used + size <= capacity) { chosen.add(id); used += size; }
         }
         return chosen;
+    }
+
+    private static String signature(boolean[][] blocked, List<String> pieceIds) {
+        List<String> sorted = new ArrayList<>(pieceIds);
+        Collections.sort(sorted);
+        StringBuilder sb = new StringBuilder(String.join(",", sorted)).append('|');
+        for (int r = 0; r < N; r++)
+            for (int c = 0; c < N; c++)
+                sb.append(blocked[r][c] ? '1' : '0');
+        return sb.toString();
     }
 
     // ── Backtracking ──────────────────────────────────────────────────────────
