@@ -113,7 +113,8 @@ public class TetrisService {
 
         int nextCombo = game.getComboCounts().getOrDefault(playerIndex, 0) + 1;
         game.getComboCounts().put(playerIndex, nextCombo);
-        int attackLines = attackLines(lastCleared, nextCombo);
+        int attackLines = toInt(map.get("attackLines"), attackLines(lastCleared, nextCombo));
+        attackLines = Math.max(0, Math.min(12, attackLines));
         if (attackLines <= 0) return;
 
         List<Integer> aliveTargets = game.getPlayerStates().entrySet().stream()

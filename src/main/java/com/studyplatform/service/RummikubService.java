@@ -12,8 +12,10 @@ import com.studyplatform.model.rummikub.RummikubGame;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 public class RummikubService {
@@ -76,7 +78,7 @@ public class RummikubService {
                     .currentTurn(game.getCurrentTurn())
                     .winner(game.getWinner())
                     .playerNames(names)
-                    .gameData(buildGameData(game))
+                    .gameData(buildPublicGameData(game))
                     .build();
         }
 
@@ -101,14 +103,50 @@ public class RummikubService {
                 .message(message)
                 .currentTurn(game.getCurrentTurn())
                 .winner(game.getWinner())
-                .gameData(buildGameData(game))
+                .gameData(buildPublicGameData(game))
                 .playerNames(names)
                 .build();
     }
 
-    public Map<String, Object> buildGameData(RummikubGame game) {
+    public StudyStateResponse buildPlayerState(Room room, Player player) {
+        RummikubGame game = (RummikubGame) room.getGameData();
+        if (game == null) return null;
+        String[] names = room.getPlayers().stream().map(Player::getNickname).toArray(String[]::new);
+        return StudyStateResponse.builder()
+                .roomId(room.getRoomId())
+                .studyType(StudyType.RUMMIKUB)
+                .status(room.getStatus())
+                .message("")
+                .currentTurn(game.getCurrentTurn())
+                .winner(game.getWinner())
+                .gameData(buildPlayerGameData(game, player.getPlayerIndex()))
+                .playerNames(names)
+                .build();
+    }
+
+    public Map<String, Object> buildPublicGameData(RummikubGame game) {
+        Map<String, Object> data = buildCommonGameData(game);
+        List<List<Integer>> hiddenHands = game.getHands().stream()
+                .map(hand -> new ArrayList<Integer>())
+                .collect(Collectors.toList());
+        data.put("hands", hiddenHands);
+        data.put("handCounts", game.getHands().stream().map(List::size).collect(Collectors.toList()));
+        return data;
+    }
+
+    public Map<String, Object> buildPlayerGameData(RummikubGame game, int playerIndex) {
+        Map<String, Object> data = buildCommonGameData(game);
+        List<List<Integer>> hands = new ArrayList<>();
+        for (int i = 0; i < game.getHands().size(); i++) {
+            hands.add(i == playerIndex ? new ArrayList<>(game.getHands().get(i)) : new ArrayList<>());
+        }
+        data.put("hands", hands);
+        data.put("handCounts", game.getHands().stream().map(List::size).collect(Collectors.toList()));
+        return data;
+    }
+
+    private Map<String, Object> buildCommonGameData(RummikubGame game) {
         Map<String, Object> data = new HashMap<>();
-        data.put("hands",            game.getHands());
         data.put("table",            game.getTable());
         data.put("poolSize",         game.getPool().size());
         data.put("initialMeld",      game.getInitialMeld());

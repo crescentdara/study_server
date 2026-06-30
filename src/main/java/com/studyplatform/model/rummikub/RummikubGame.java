@@ -131,6 +131,10 @@ public class RummikubGame {
         }
         if (usedFromHand.isEmpty()) return "Must play at least one tile from hand";
 
+        if (!initialMeld[playerIndex] && !oldTableIsUnchanged(newTable)) {
+            return "First meld cannot use or rearrange existing table tiles";
+        }
+
         // Validate all sets
         for (List<Integer> set : newTable) {
             if (!isValidSet(set)) return "Invalid set: " + set;
@@ -153,6 +157,33 @@ public class RummikubGame {
         currentTurn = (currentTurn + 1) % numPlayers;
         hasDrawnThisTurn = false;
         return null;
+    }
+
+    private boolean oldTableIsUnchanged(List<List<Integer>> newTable) {
+        List<List<Integer>> remaining = newTable.stream()
+                .map(ArrayList::new)
+                .collect(Collectors.toCollection(ArrayList::new));
+        for (List<Integer> oldSet : table) {
+            int matchIndex = -1;
+            for (int i = 0; i < remaining.size(); i++) {
+                if (sameTiles(oldSet, remaining.get(i))) {
+                    matchIndex = i;
+                    break;
+                }
+            }
+            if (matchIndex < 0) return false;
+            remaining.remove(matchIndex);
+        }
+        return true;
+    }
+
+    private static boolean sameTiles(List<Integer> a, List<Integer> b) {
+        if (a.size() != b.size()) return false;
+        List<Integer> left = new ArrayList<>(a);
+        List<Integer> right = new ArrayList<>(b);
+        Collections.sort(left);
+        Collections.sort(right);
+        return left.equals(right);
     }
 
     // --- Getters ---
