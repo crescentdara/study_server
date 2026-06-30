@@ -27,7 +27,6 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 import java.util.List;
@@ -148,6 +147,7 @@ public class StudyController {
         }
         broadcast(roomId, state);
         sendCatchMindSecret(room);
+        sendRummikubPrivateState(room);
     }
 
     /**
@@ -209,6 +209,7 @@ public class StudyController {
             StudyStateResponse state = buildInitialState(room);
             broadcast(roomId, state);
             sendCatchMindSecret(room);
+            sendRummikubPrivateState(room);
             return;
         }
 
@@ -225,6 +226,7 @@ public class StudyController {
             StudyStateResponse state = buildInitialState(room);
             broadcast(roomId, state);
             sendCatchMindSecret(room);
+            sendRummikubPrivateState(room);
             return;
         }
 
@@ -252,6 +254,7 @@ public class StudyController {
             };
             broadcast(roomId, response);
             sendCatchMindSecret(room);
+            sendRummikubPrivateState(room);
         } catch (IllegalArgumentException | IllegalStateException e) {
             broadcastError(roomId, room, e.getMessage());
         }
@@ -269,31 +272,10 @@ public class StudyController {
     }
 
     /** 방 채팅 메시지 처리 → /topic/chat/{roomId} 브로드캐스트 */
-    @MessageMapping("/study/{roomId}/chat")
-    public void chat(@DestinationVariable String roomId,
-                     @Payload StudyMoveRequest request) {
-        Room room = roomService.getRoom(roomId);
-        if (room == null) return;
-
-        Player player = room.getPlayerBySession(request.getSessionId());
-        String nickname = player != null ? player.getNickname() : "unknown";
-        String emoji = request.getEmoji() == null ? "" : request.getEmoji();
-        ChatMessage chatMessage = buildChatMessage(nickname, emoji, request);
-        if (chatMessage == null) return;
-        chatHistoryService.addRoom(roomId, chatMessage);
-        msg.convertAndSend("/topic/chat/" + roomId, chatMessage);
-    }
-
     @GetMapping("/api/chat/lobby/history")
     @ResponseBody
     public List<ChatMessage> lobbyChatHistory() {
         return chatHistoryService.lobbyHistory();
-    }
-
-    @GetMapping("/api/chat/rooms/{roomId}/history")
-    @ResponseBody
-    public List<ChatMessage> roomChatHistory(@PathVariable String roomId) {
-        return chatHistoryService.roomHistory(roomId);
     }
 
     private ChatMessage buildChatMessage(String nickname, String emoji, StudyMoveRequest request) {
@@ -316,22 +298,24 @@ public class StudyController {
         if (text == null || text.trim().isEmpty()) return null;
         ChatMessage msg = new ChatMessage(nickname, text.trim(), System.currentTimeMillis(), emoji);
 
-        // Detect @mention: message starts with @nickname (followed by space or end)
+        // Detect @mention and explicit voice mention.
         String trimmed = text.trim();
-        if (trimmed.startsWith("@")) {
+        if (trimmed.startsWith("/voice ")) {
+            String rest = trimmed.substring("/voice".length()).trim();
+            if (rest.startsWith("@")) {
+                int spaceIdx = rest.indexOf(' ');
+                String mentioned = spaceIdx > 0 ? rest.substring(1, spaceIdx) : rest.substring(1);
+                String voiceText = spaceIdx > 0 ? rest.substring(spaceIdx + 1).trim() : "";
+                if (!mentioned.isEmpty()) msg.setMentionedNickname(mentioned);
+                if (!voiceText.isEmpty()) {
+                    msg.setVoiceRequested(true);
+                    msg.setVoiceText(voiceText.length() > 80 ? voiceText.substring(0, 80) : voiceText);
+                }
+            }
+        } else if (trimmed.startsWith("@")) {
             int spaceIdx = trimmed.indexOf(' ');
             String mentioned = spaceIdx > 0 ? trimmed.substring(1, spaceIdx) : trimmed.substring(1);
             if (!mentioned.isEmpty()) msg.setMentionedNickname(mentioned);
-            if (spaceIdx > 0) {
-                String rest = trimmed.substring(spaceIdx + 1).trim();
-                if (rest.startsWith("/voice")) {
-                    String voiceText = rest.substring("/voice".length()).trim();
-                    if (!voiceText.isEmpty()) {
-                        msg.setVoiceRequested(true);
-                        msg.setVoiceText(voiceText.length() > 80 ? voiceText.substring(0, 80) : voiceText);
-                    }
-                }
-            }
         }
 
         return msg;
@@ -368,6 +352,17 @@ public class StudyController {
         if (drawerIndex < 0 || drawerIndex >= room.getPlayers().size()) return;
         String sessionId = room.getPlayers().get(drawerIndex).getSessionId();
         msg.convertAndSend("/topic/study/" + room.getRoomId() + "/secret/" + sessionId, secret);
+    }
+
+    private void sendRummikubPrivateState(Room room) {
+        if (room == null || room.getStudyType() != StudyType.RUMMIKUB || room.getStatus() == StudyStatus.WAITING) {
+            return;
+        }
+        for (Player player : room.getPlayers()) {
+            StudyStateResponse privateState = rummikubService.buildPlayerState(room, player);
+            if (privateState == null) continue;
+            msg.convertAndSend("/topic/study/" + room.getRoomId() + "/secret/" + player.getSessionId(), privateState);
+        }
     }
 
     private void broadcastError(String roomId, String text) {
