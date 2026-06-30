@@ -8,6 +8,7 @@ import com.studyplatform.service.BaseballService;
 import com.studyplatform.service.BingoService;
 import com.studyplatform.service.BreakoutService;
 import com.studyplatform.service.CatchMindService;
+import com.studyplatform.service.ChatHistoryService;
 import com.studyplatform.service.WordChainService;
 import com.studyplatform.service.RummikubService;
 import com.studyplatform.service.DaVinciService;
@@ -25,6 +26,11 @@ import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
 import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.ResponseBody;
+
+import java.util.List;
 
 /**
  * 게임 WebSocket(STOMP) 컨트롤러
@@ -42,6 +48,7 @@ public class StudyController {
 
     private final SimpMessagingTemplate msg;
     private final RoomService roomService;
+    private final ChatHistoryService chatHistoryService;
     private final SessionRegistry sessionRegistry;
     private final BaseballService baseballService;
     private final BingoService bingoService;
@@ -58,6 +65,7 @@ public class StudyController {
     private final UbongoService   ubongoService;
 
     public StudyController(SimpMessagingTemplate msg, RoomService roomService,
+                           ChatHistoryService chatHistoryService,
                            SessionRegistry sessionRegistry,
                            BaseballService baseballService, BingoService bingoService,
                            OmokService omokService, OldMaidService oldMaidService,
@@ -68,6 +76,7 @@ public class StudyController {
                            UbongoService ubongoService) {
         this.msg             = msg;
         this.roomService     = roomService;
+        this.chatHistoryService = chatHistoryService;
         this.sessionRegistry = sessionRegistry;
         this.baseballService = baseballService;
         this.bingoService    = bingoService;
@@ -255,6 +264,7 @@ public class StudyController {
         String emoji    = request.getEmoji() != null ? request.getEmoji() : "";
         ChatMessage chatMessage = buildChatMessage(nickname, emoji, request);
         if (chatMessage == null) return;
+        chatHistoryService.addLobby(chatMessage);
         msg.convertAndSend("/topic/lobby/chat", chatMessage);
     }
 
@@ -270,7 +280,20 @@ public class StudyController {
         String emoji = request.getEmoji() == null ? "" : request.getEmoji();
         ChatMessage chatMessage = buildChatMessage(nickname, emoji, request);
         if (chatMessage == null) return;
+        chatHistoryService.addRoom(roomId, chatMessage);
         msg.convertAndSend("/topic/chat/" + roomId, chatMessage);
+    }
+
+    @GetMapping("/api/chat/lobby/history")
+    @ResponseBody
+    public List<ChatMessage> lobbyChatHistory() {
+        return chatHistoryService.lobbyHistory();
+    }
+
+    @GetMapping("/api/chat/rooms/{roomId}/history")
+    @ResponseBody
+    public List<ChatMessage> roomChatHistory(@PathVariable String roomId) {
+        return chatHistoryService.roomHistory(roomId);
     }
 
     private ChatMessage buildChatMessage(String nickname, String emoji, StudyMoveRequest request) {
