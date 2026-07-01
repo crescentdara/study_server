@@ -1,19 +1,27 @@
 package com.studyplatform.model.alkkagi;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Random;
 
 public class AlkkagiGame {
+    public static final long TURN_TIME_LIMIT_MS = 15_000L;
     private final int numPlayers;
     private final List<AlkkagiStone> stones = new ArrayList<>();
+    private final List<String> shotLog = new ArrayList<>();
+    private final String mapType;
     private int currentTurn = 0;
     private int winner = -1;
     private int shotCount = 0;
     private int nextShotId = 1;
+    private long turnStartedAt = System.currentTimeMillis();
     private AlkkagiShot activeShot = null;
 
     public AlkkagiGame(int numPlayers) {
         this.numPlayers = Math.max(2, Math.min(2, numPlayers));
+        List<String> maps = Arrays.asList("CLASSIC", "CENTER_HOLE", "PILLARS", "NARROW_BRIDGE");
+        this.mapType = maps.get(new Random().nextInt(maps.size()));
         initStones();
     }
 
@@ -32,6 +40,7 @@ public class AlkkagiGame {
         if (winner >= 0) return "Game already finished";
         if (activeShot != null) return "Shot already resolving";
         if (playerIndex != currentTurn) return "Not your turn";
+        if (isTurnExpired()) return "Turn expired";
         if (stoneId < 0 || stoneId >= stones.size()) return "Invalid stone id";
         AlkkagiStone stone = stones.get(stoneId);
         if (!stone.isActive()) return "Stone is already out";
@@ -53,6 +62,9 @@ public class AlkkagiGame {
         if (activeShot.getId() != shotId) return "Shot id mismatch";
         if (activeShot.getPlayerIndex() != playerIndex) return "Only shooter can confirm result";
         if (nextStones == null || nextStones.size() != stones.size()) return "Invalid stone state";
+        int previousTurn = currentTurn;
+        int beforeOwn = activeCount(playerIndex);
+        int beforeOpponent = activeCount((playerIndex + 1) % numPlayers);
 
         for (AlkkagiStone stone : nextStones) {
             if (stone.getId() < 0 || stone.getId() >= stones.size()) return "Invalid stone id";
@@ -65,14 +77,27 @@ public class AlkkagiGame {
         shotCount++;
         activeShot = null;
         updateWinner();
+        int ownOut = beforeOwn - activeCount(playerIndex);
+        int opponentOut = beforeOpponent - activeCount((playerIndex + 1) % numPlayers);
+        pushLog("P" + (playerIndex + 1) + " shot: opponent -" + Math.max(0, opponentOut)
+                + ", self -" + Math.max(0, ownOut));
         if (winner < 0) {
             currentTurn = (currentTurn + 1) % numPlayers;
+            turnStartedAt = System.currentTimeMillis();
+        } else {
+            currentTurn = previousTurn;
         }
         return null;
     }
 
-    public void clearActiveShot() {
-        activeShot = null;
+    public String timeoutTurn() {
+        if (winner >= 0) return "Game already finished";
+        if (activeShot != null) return "Shot already resolving";
+        if (!isTurnExpired()) return "Turn has time remaining";
+        pushLog("P" + (currentTurn + 1) + " timed out");
+        currentTurn = (currentTurn + 1) % numPlayers;
+        turnStartedAt = System.currentTimeMillis();
+        return null;
     }
 
     private List<AlkkagiStone> copySorted(List<AlkkagiStone> source) {
@@ -99,6 +124,15 @@ public class AlkkagiGame {
         return count;
     }
 
+    private boolean isTurnExpired() {
+        return System.currentTimeMillis() - turnStartedAt > TURN_TIME_LIMIT_MS;
+    }
+
+    private void pushLog(String message) {
+        shotLog.add(message);
+        while (shotLog.size() > 8) shotLog.remove(0);
+    }
+
     private double clamp(double value) {
         if (Double.isNaN(value) || Double.isInfinite(value)) return 0.5;
         return Math.max(-0.2, Math.min(1.2, value));
@@ -114,5 +148,9 @@ public class AlkkagiGame {
     public int getCurrentTurn() { return currentTurn; }
     public int getWinner() { return winner; }
     public int getShotCount() { return shotCount; }
+    public long getTurnStartedAt() { return turnStartedAt; }
+    public long getTurnTimeLimitMs() { return TURN_TIME_LIMIT_MS; }
+    public List<String> getShotLog() { return shotLog; }
+    public String getMapType() { return mapType; }
     public AlkkagiShot getActiveShot() { return activeShot; }
 }

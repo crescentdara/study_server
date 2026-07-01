@@ -47,7 +47,10 @@ public class RoomService {
     public Room createRoom(String roomName, StudyType studyType,
                            String nickname, String sessionId,
                            int maxPlayers, int digits, int boardSize) {
-        Room room = new Room(roomName, studyType);
+        String safeRoomName = roomName == null || roomName.trim().isEmpty()
+                ? studyType.name() + "-" + java.util.UUID.randomUUID().toString().substring(0, 4)
+                : roomName.trim();
+        Room room = new Room(safeRoomName, studyType);
         // TETRIS/INCIDENT_AVOID/BREAKOUT=3명 고정, OMOK=2명 고정, RUSH_HOUR=1~3명, OLDMAID=2~7명, 나머지=2~6명
         room.setMaxPlayers(studyType == StudyType.TETRIS || studyType == StudyType.INCIDENT_AVOID || studyType == StudyType.BREAKOUT ? 3
                 : studyType == StudyType.OMOK      ? 2
