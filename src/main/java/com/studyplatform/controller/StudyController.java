@@ -5,6 +5,7 @@ import com.studyplatform.dto.response.ChatMessage;
 import com.studyplatform.dto.response.StudyStateResponse;
 import com.studyplatform.model.*;
 import com.studyplatform.service.BaseballService;
+import com.studyplatform.service.AlkkagiService;
 import com.studyplatform.service.BingoService;
 import com.studyplatform.service.BreakoutService;
 import com.studyplatform.service.CatchMindService;
@@ -62,6 +63,7 @@ public class StudyController {
     private final DaVinciService daVinciService;
     private final RushHourService rushHourService;
     private final UbongoService   ubongoService;
+    private final AlkkagiService alkkagiService;
 
     public StudyController(SimpMessagingTemplate msg, RoomService roomService,
                            ChatHistoryService chatHistoryService,
@@ -72,7 +74,7 @@ public class StudyController {
                            BreakoutService breakoutService, CatchMindService catchMindService,
                            WordChainService wordChainService, RummikubService rummikubService,
                            DaVinciService daVinciService, RushHourService rushHourService,
-                           UbongoService ubongoService) {
+                           UbongoService ubongoService, AlkkagiService alkkagiService) {
         this.msg             = msg;
         this.roomService     = roomService;
         this.chatHistoryService = chatHistoryService;
@@ -90,6 +92,7 @@ public class StudyController {
         this.daVinciService   = daVinciService;
         this.rushHourService  = rushHourService;
         this.ubongoService    = ubongoService;
+        this.alkkagiService   = alkkagiService;
     }
 
     /** 방 입장 시 현재 상태 동기화 */
@@ -142,6 +145,8 @@ public class StudyController {
             state = rushHourService.buildInitialState(room);
         } else if (room.getStudyType() == StudyType.UBONGO) {
             state = ubongoService.buildInitialState(room);
+        } else if (room.getStudyType() == StudyType.ALKKAGI) {
+            state = alkkagiService.buildInitialState(room);
         } else {
             state = incidentAvoidService.buildInitialState(room);
         }
@@ -251,6 +256,7 @@ public class StudyController {
                 case DAVINCI_CODE -> daVinciService.processMove(room, player, request);
                 case RUSH_HOUR   -> rushHourService.processMove(room, player, request);
                 case UBONGO      -> ubongoService.processMove(room, player, request);
+                case ALKKAGI     -> alkkagiService.processMove(room, player, request);
             };
             broadcast(roomId, response);
             sendCatchMindSecret(room);
@@ -340,6 +346,7 @@ public class StudyController {
             case DAVINCI_CODE -> daVinciService.buildInitialState(room);
             case RUSH_HOUR   -> rushHourService.buildInitialState(room);
             case UBONGO      -> ubongoService.buildInitialState(room);
+            case ALKKAGI     -> alkkagiService.buildInitialState(room);
         };
     }
 
