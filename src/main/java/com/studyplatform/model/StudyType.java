@@ -13,5 +13,6 @@ public enum StudyType {
     RUMMIKUB,
     DAVINCI_CODE,
     RUSH_HOUR,
-    UBONGO
+    UBONGO,
+    ALKKAGI
 }
