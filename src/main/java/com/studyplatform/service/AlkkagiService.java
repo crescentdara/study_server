@@ -32,6 +32,9 @@ public class AlkkagiService {
         if ("ALKKAGI_RESULT".equals(request.getMoveType()) || "ALKKAGI_SHOT".equals(request.getMoveType())) {
             return handleResult(room, game, player, request.getPayload());
         }
+        if ("ALKKAGI_TIMEOUT".equals(request.getMoveType())) {
+            return handleTimeout(room, game);
+        }
         throw new IllegalArgumentException("Unknown ALKKAGI move: " + request.getMoveType());
     }
 
@@ -56,6 +59,12 @@ public class AlkkagiService {
         if (error != null) return buildState(room, game, "ERROR: " + error);
         if (game.getWinner() >= 0) room.setStatus(StudyStatus.FINISHED);
         return buildState(room, game, player.getNickname() + " played a shot.");
+    }
+
+    private StudyStateResponse handleTimeout(Room room, AlkkagiGame game) {
+        String error = game.timeoutTurn();
+        if (error != null) return buildState(room, game, "ERROR: " + error);
+        return buildState(room, game, "Turn timed out.");
     }
 
     public StudyStateResponse buildInitialState(Room room) {
@@ -87,6 +96,10 @@ public class AlkkagiService {
         data.put("currentTurn", game.getCurrentTurn());
         data.put("winner", game.getWinner());
         data.put("shotCount", game.getShotCount());
+        data.put("turnStartedAt", game.getTurnStartedAt());
+        data.put("turnTimeLimitMs", game.getTurnTimeLimitMs());
+        data.put("shotLog", game.getShotLog());
+        data.put("mapType", game.getMapType());
         data.put("stones", game.getStones());
         data.put("activeShot", game.getActiveShot());
         return data;
