@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Random;
 
 public class AlkkagiGame {
-    public static final long TURN_TIME_LIMIT_MS = 15_000L;
+    public static final long TURN_TIME_LIMIT_MS = 0L;
     private final int numPlayers;
     private final List<AlkkagiStone> stones = new ArrayList<>();
     private final List<String> shotLog = new ArrayList<>();
@@ -19,14 +19,24 @@ public class AlkkagiGame {
     private AlkkagiShot activeShot = null;
 
     public AlkkagiGame(int numPlayers) {
-        this.numPlayers = Math.max(2, Math.min(2, numPlayers));
-        List<String> maps = Arrays.asList("CLASSIC", "CENTER_HOLE", "PILLARS", "NARROW_BRIDGE");
+        this.numPlayers = Math.max(1, Math.min(3, numPlayers));
+        List<String> maps = Arrays.asList(
+                "CLASSIC",
+                "CENTER_HOLE",
+                "CORNER_HOLES",
+                "SIDE_POCKETS",
+                "PILLARS",
+                "BUMPER_FIELD",
+                "PINBALL",
+                "NARROW_BRIDGE",
+                "RIVER"
+        );
         this.mapType = maps.get(new Random().nextInt(maps.size()));
         initStones();
     }
 
     private void initStones() {
-        double[] lanes = {0.20, 0.35, 0.50, 0.65, 0.80};
+        double[] lanes = {0.22, 0.36, 0.50, 0.64, 0.78};
         int id = 0;
         for (double y : lanes) {
             stones.add(new AlkkagiStone(id++, 0, 0.14, y, true));
@@ -34,13 +44,18 @@ public class AlkkagiGame {
         for (double y : lanes) {
             stones.add(new AlkkagiStone(id++, 1, 0.86, y, true));
         }
+        if (numPlayers >= 3) {
+            double[] xs = {0.36, 0.43, 0.50, 0.57, 0.64};
+            for (double x : xs) {
+                stones.add(new AlkkagiStone(id++, 2, x, 0.16, true));
+            }
+        }
     }
 
     public String beginShot(int playerIndex, int stoneId, double vx, double vy) {
         if (winner >= 0) return "Game already finished";
         if (activeShot != null) return "Shot already resolving";
         if (playerIndex != currentTurn) return "Not your turn";
-        if (isTurnExpired()) return "Turn expired";
         if (stoneId < 0 || stoneId >= stones.size()) return "Invalid stone id";
         AlkkagiStone stone = stones.get(stoneId);
         if (!stone.isActive()) return "Stone is already out";
@@ -64,7 +79,7 @@ public class AlkkagiGame {
         if (nextStones == null || nextStones.size() != stones.size()) return "Invalid stone state";
         int previousTurn = currentTurn;
         int beforeOwn = activeCount(playerIndex);
-        int beforeOpponent = activeCount((playerIndex + 1) % numPlayers);
+        int beforeOpponents = activeOpponentCount(playerIndex);
 
         for (AlkkagiStone stone : nextStones) {
             if (stone.getId() < 0 || stone.getId() >= stones.size()) return "Invalid stone id";
@@ -78,11 +93,11 @@ public class AlkkagiGame {
         activeShot = null;
         updateWinner();
         int ownOut = beforeOwn - activeCount(playerIndex);
-        int opponentOut = beforeOpponent - activeCount((playerIndex + 1) % numPlayers);
-        pushLog("P" + (playerIndex + 1) + " shot: opponent -" + Math.max(0, opponentOut)
+        int opponentOut = beforeOpponents - activeOpponentCount(playerIndex);
+        pushLog("P" + (playerIndex + 1) + " shot: opponents -" + Math.max(0, opponentOut)
                 + ", self -" + Math.max(0, ownOut));
         if (winner < 0) {
-            currentTurn = (currentTurn + 1) % numPlayers;
+            currentTurn = nextActiveTurn(currentTurn);
             turnStartedAt = System.currentTimeMillis();
         } else {
             currentTurn = previousTurn;
@@ -91,13 +106,7 @@ public class AlkkagiGame {
     }
 
     public String timeoutTurn() {
-        if (winner >= 0) return "Game already finished";
-        if (activeShot != null) return "Shot already resolving";
-        if (!isTurnExpired()) return "Turn has time remaining";
-        pushLog("P" + (currentTurn + 1) + " timed out");
-        currentTurn = (currentTurn + 1) % numPlayers;
-        turnStartedAt = System.currentTimeMillis();
-        return null;
+        return "Time limit is disabled";
     }
 
     private List<AlkkagiStone> copySorted(List<AlkkagiStone> source) {
@@ -109,11 +118,20 @@ public class AlkkagiGame {
     }
 
     private void updateWinner() {
-        int p0 = activeCount(0);
-        int p1 = activeCount(1);
-        if (p0 == 0 && p1 == 0) winner = currentTurn;
-        else if (p0 == 0) winner = 1;
-        else if (p1 == 0) winner = 0;
+        if (numPlayers == 1) {
+            if (activeCount(0) == 0) winner = 0;
+            return;
+        }
+        int alivePlayers = 0;
+        int lastAlive = -1;
+        for (int i = 0; i < numPlayers; i++) {
+            if (activeCount(i) > 0) {
+                alivePlayers++;
+                lastAlive = i;
+            }
+        }
+        if (alivePlayers == 0) winner = currentTurn;
+        else if (alivePlayers == 1) winner = lastAlive;
     }
 
     private int activeCount(int owner) {
@@ -124,8 +142,24 @@ public class AlkkagiGame {
         return count;
     }
 
+    private int activeOpponentCount(int owner) {
+        int count = 0;
+        for (AlkkagiStone stone : stones) {
+            if (stone.getOwner() != owner && stone.isActive()) count++;
+        }
+        return count;
+    }
+
+    private int nextActiveTurn(int from) {
+        for (int step = 1; step <= numPlayers; step++) {
+            int candidate = (from + step) % numPlayers;
+            if (activeCount(candidate) > 0) return candidate;
+        }
+        return from;
+    }
+
     private boolean isTurnExpired() {
-        return System.currentTimeMillis() - turnStartedAt > TURN_TIME_LIMIT_MS;
+        return false;
     }
 
     private void pushLog(String message) {

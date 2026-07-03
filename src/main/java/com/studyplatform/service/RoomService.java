@@ -54,6 +54,7 @@ public class RoomService {
         // TETRIS/INCIDENT_AVOID/BREAKOUT=3명 고정, OMOK=2명 고정, RUSH_HOUR=1~3명, OLDMAID=2~7명, 나머지=2~6명
         room.setMaxPlayers(studyType == StudyType.TETRIS || studyType == StudyType.INCIDENT_AVOID || studyType == StudyType.BREAKOUT ? 3
                 : studyType == StudyType.OMOK      ? 2
+                : studyType == StudyType.ALKKAGI   ? Math.max(1, Math.min(3, maxPlayers))
                 : studyType == StudyType.RUSH_HOUR ? Math.max(1, Math.min(3, maxPlayers))
                 : studyType == StudyType.UBONGO    ? Math.max(1, Math.min(3, maxPlayers))
                 : studyType == StudyType.OLDMAID   ? Math.max(2, Math.min(7, maxPlayers))
@@ -96,7 +97,7 @@ public class RoomService {
      * @throws RuntimeException 2명 미만이거나 이미 시작된 경우
      */
     public void startGame(Room room) {
-        if (room.getStudyType() != StudyType.TETRIS && room.getStudyType() != StudyType.INCIDENT_AVOID && room.getStudyType() != StudyType.BREAKOUT && room.getStudyType() != StudyType.RUSH_HOUR && room.getStudyType() != StudyType.UBONGO && room.getPlayers().size() < 2)
+        if (room.getStudyType() != StudyType.TETRIS && room.getStudyType() != StudyType.INCIDENT_AVOID && room.getStudyType() != StudyType.BREAKOUT && room.getStudyType() != StudyType.RUSH_HOUR && room.getStudyType() != StudyType.UBONGO && room.getStudyType() != StudyType.ALKKAGI && room.getPlayers().size() < 2)
             throw new RuntimeException("Need at least 2 players to start.");
         if (room.getStatus() != StudyStatus.WAITING)
             throw new RuntimeException("Game already started.");
@@ -171,9 +172,12 @@ public class RoomService {
         if (room.getStudyType() == StudyType.TETRIS || room.getStudyType() == StudyType.INCIDENT_AVOID || room.getStudyType() == StudyType.BREAKOUT) {
             room.setMaxPlayers(3);
             room.setBoardSize(20);
-        } else if (room.getStudyType() == StudyType.OMOK || room.getStudyType() == StudyType.ALKKAGI) {
+        } else if (room.getStudyType() == StudyType.OMOK) {
             room.setMaxPlayers(2);
-            room.setBoardSize(room.getStudyType() == StudyType.OMOK ? 19 : 0);
+            room.setBoardSize(19);
+        } else if (room.getStudyType() == StudyType.ALKKAGI) {
+            room.setMaxPlayers(Math.max(1, Math.min(3, room.getMaxPlayers())));
+            room.setBoardSize(0);
         }
     }
 
