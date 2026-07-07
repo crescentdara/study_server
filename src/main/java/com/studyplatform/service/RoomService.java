@@ -52,7 +52,8 @@ public class RoomService {
                 : roomName.trim();
         Room room = new Room(safeRoomName, studyType);
         // TETRIS/INCIDENT_AVOID/BREAKOUT=3명 고정, OMOK=2명 고정, RUSH_HOUR=1~3명, OLDMAID=2~7명, 나머지=2~6명
-        room.setMaxPlayers(studyType == StudyType.TETRIS || studyType == StudyType.INCIDENT_AVOID || studyType == StudyType.BREAKOUT ? 3
+        room.setMaxPlayers(studyType == StudyType.TETRIS ? 4
+                : studyType == StudyType.INCIDENT_AVOID || studyType == StudyType.BREAKOUT ? 3
                 : studyType == StudyType.OMOK      ? 2
                 : studyType == StudyType.ALKKAGI   ? Math.max(1, Math.min(3, maxPlayers))
                 : studyType == StudyType.RUSH_HOUR ? Math.max(1, Math.min(3, maxPlayers))
@@ -81,6 +82,10 @@ public class RoomService {
         // 같은 세션이 이미 입장해 있으면 중복 추가 방지 (나갔다 들어오는 경우)
         if (room.getPlayerBySession(sessionId) != null)
             throw new RuntimeException("Already in this room.");
+        boolean duplicateNickname = room.getPlayers().stream()
+                .anyMatch(player -> player.getNickname().equals(nickname));
+        if (duplicateNickname)
+            throw new RuntimeException("Nickname already exists in this room.");
 
         int nextIndex = room.getPlayers().size();
         room.getPlayers().add(new Player(sessionId, nickname, nextIndex));
@@ -169,7 +174,10 @@ public class RoomService {
     }
 
     private void normalizeRoomConfig(Room room) {
-        if (room.getStudyType() == StudyType.TETRIS || room.getStudyType() == StudyType.INCIDENT_AVOID || room.getStudyType() == StudyType.BREAKOUT) {
+        if (room.getStudyType() == StudyType.TETRIS) {
+            room.setMaxPlayers(4);
+            room.setBoardSize(20);
+        } else if (room.getStudyType() == StudyType.INCIDENT_AVOID || room.getStudyType() == StudyType.BREAKOUT) {
             room.setMaxPlayers(3);
             room.setBoardSize(20);
         } else if (room.getStudyType() == StudyType.OMOK) {
@@ -221,6 +229,14 @@ public class RoomService {
 
         // 일반 플레이어 퇴장: 목록에서 제거
         room.getPlayers().remove(leaving);
+
+        if (room.getStatus() != StudyStatus.WAITING) {
+            room.setStatus(StudyStatus.FINISHED);
+            for (int i = 0; i < room.getPlayers().size(); i++) {
+                room.getPlayers().get(i).setPlayerIndex(i);
+            }
+            return room;
+        }
 
         // playerIndex 재정렬 (0부터 연속 번호 유지)
         for (int i = 0; i < room.getPlayers().size(); i++) {

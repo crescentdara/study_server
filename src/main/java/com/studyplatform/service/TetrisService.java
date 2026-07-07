@@ -113,8 +113,12 @@ public class TetrisService {
 
         int nextCombo = game.getComboCounts().getOrDefault(playerIndex, 0) + 1;
         game.getComboCounts().put(playerIndex, nextCombo);
-        int attackLines = toInt(map.get("attackLines"), attackLines(lastCleared, nextCombo));
-        attackLines = Math.max(0, Math.min(12, attackLines));
+        boolean tspin = toBoolean(map.get("tspin"), false);
+        boolean b2b = toBoolean(map.get("b2b"), false);
+        boolean perfectClear = toBoolean(map.get("perfectClear"), false);
+        int maxAttackLines = attackLines(lastCleared, nextCombo, tspin, b2b, perfectClear);
+        int claimedAttackLines = toInt(map.get("attackLines"), maxAttackLines);
+        int attackLines = Math.max(0, Math.min(maxAttackLines, Math.min(12, claimedAttackLines)));
         if (attackLines <= 0) return;
 
         List<Integer> aliveTargets = game.getPlayerStates().entrySet().stream()
@@ -137,15 +141,18 @@ public class TetrisService {
                         "cleared", lastCleared
                 ));
         game.getLastAttackers().put(target, playerIndex);
-        rememberAttackLog(game, Map.of(
-                "attackId", targetAttackId,
-                "from", playerIndex,
-                "to", target,
-                "lines", attackLines,
-                "combo", nextCombo,
-                "cleared", lastCleared,
-                "timestamp", System.currentTimeMillis()
-        ));
+        Map<String, Object> log = new HashMap<>();
+        log.put("attackId", targetAttackId);
+        log.put("from", playerIndex);
+        log.put("to", target);
+        log.put("lines", attackLines);
+        log.put("combo", nextCombo);
+        log.put("cleared", lastCleared);
+        log.put("tspin", tspin);
+        log.put("b2b", b2b);
+        log.put("perfectClear", perfectClear);
+        log.put("timestamp", System.currentTimeMillis());
+        rememberAttackLog(game, log);
     }
 
     private int selectTarget(TetrisGame game, int playerIndex, List<Integer> aliveTargets) {
@@ -175,16 +182,25 @@ public class TetrisService {
         }
     }
 
-    private int attackLines(int cleared, int combo) {
-        int base = switch (cleared) {
-            case 1 -> 0;
-            case 2 -> 1;
-            case 3 -> 2;
-            case 4 -> 4;
-            default -> 0;
-        };
+    private int attackLines(int cleared, int combo, boolean tspin, boolean b2b, boolean perfectClear) {
+        int base = tspin
+                ? switch (cleared) {
+                    case 1 -> 2;
+                    case 2 -> 4;
+                    case 3, 4 -> 6;
+                    default -> 0;
+                }
+                : switch (cleared) {
+                    case 1 -> 0;
+                    case 2 -> 1;
+                    case 3 -> 2;
+                    case 4 -> 4;
+                    default -> 0;
+                };
+        int b2bBonus = b2b && (tspin || cleared >= 4) ? 1 : 0;
         int comboBonus = Math.min(4, Math.max(0, combo - 1));
-        return base + comboBonus;
+        int perfectBonus = perfectClear ? 6 : 0;
+        return base + b2bBonus + comboBonus + perfectBonus;
     }
 
     private void updateWinner(Room room, TetrisGame game, int playerIndex) {
