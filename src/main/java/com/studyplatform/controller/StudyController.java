@@ -26,6 +26,8 @@ import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
@@ -45,6 +47,7 @@ import java.util.List;
  */
 @Controller
 public class StudyController {
+    private static final Logger log = LoggerFactory.getLogger(StudyController.class);
 
     private final SimpMessagingTemplate msg;
     private final RoomService roomService;
@@ -263,6 +266,10 @@ public class StudyController {
             sendRummikubPrivateState(room);
         } catch (IllegalArgumentException | IllegalStateException e) {
             broadcastError(roomId, room, e.getMessage());
+        } catch (RuntimeException e) {
+            log.warn("Failed to process move. roomId={}, moveType={}, studyType={}",
+                    roomId, moveType, room.getStudyType(), e);
+            broadcastError(roomId, room, "Game state sync failed. Please try restart.");
         }
     }
 
@@ -379,8 +386,14 @@ public class StudyController {
     }
 
     private void broadcastError(String roomId, Room room, String text) {
-        StudyStateResponse state = buildInitialState(room);
-        state.setMessage("ERROR: " + text);
-        msg.convertAndSend("/topic/study/" + roomId, state);
+        try {
+            StudyStateResponse state = buildInitialState(room);
+            state.setMessage("ERROR: " + text);
+            msg.convertAndSend("/topic/study/" + roomId, state);
+        } catch (RuntimeException e) {
+            log.warn("Failed to rebuild state for error response. roomId={}, studyType={}",
+                    roomId, room != null ? room.getStudyType() : null, e);
+            broadcastError(roomId, text);
+        }
     }
 }
