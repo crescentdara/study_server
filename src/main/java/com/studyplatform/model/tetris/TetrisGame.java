@@ -20,6 +20,7 @@ public class TetrisGame {
     private final Map<Integer, Integer> lastAttackers = new ConcurrentHashMap<>();
     private final Map<Integer, Integer> targetCursors = new ConcurrentHashMap<>();
     private final List<Map<String, Object>> attackLog = new CopyOnWriteArrayList<>();
+    private final List<Map<String, Object>> distractEvents = new CopyOnWriteArrayList<>();
     private final Set<String> processedAttackKeys = ConcurrentHashMap.newKeySet();
     private final List<String> processedAttackOrder = new CopyOnWriteArrayList<>();
     private final String instanceId = UUID.randomUUID().toString();
