@@ -18,9 +18,10 @@ import java.util.Map;
 public class TetrisService {
     private static final int MAX_PROCESSED_ATTACK_KEYS = 500;
     private static final int MAX_ATTACK_LOG = 20;
+    private static final int MAX_DISTRACT_EVENTS = 40;
 
     public StudyStateResponse processMove(Room room, Player player, StudyMoveRequest request) {
-        if (!"TETRIS_SYNC".equals(request.getMoveType()) && !"TETRIS_PAUSE".equals(request.getMoveType())) {
+        if (!"TETRIS_SYNC".equals(request.getMoveType()) && !"TETRIS_PAUSE".equals(request.getMoveType()) && !"TETRIS_DISTRACT".equals(request.getMoveType())) {
             throw new IllegalArgumentException("Unknown TETRIS move.");
         }
         TetrisGame game = (TetrisGame) room.getGameData();
@@ -30,6 +31,10 @@ public class TetrisService {
         }
         if ("TETRIS_PAUSE".equals(request.getMoveType())) {
             game.setPaused(readPaused(request.getPayload(), !game.isPaused()));
+            return buildInitialState(room);
+        }
+        if ("TETRIS_DISTRACT".equals(request.getMoveType())) {
+            distract(game, player.getPlayerIndex(), request.getPayload());
             return buildInitialState(room);
         }
         syncState(game, player.getPlayerIndex(), request.getPayload());
@@ -54,6 +59,7 @@ public class TetrisService {
         gameData.put("comboCounts", game.getComboCounts());
         gameData.put("lastAttackers", game.getLastAttackers());
         gameData.put("attackLog", game.getAttackLog());
+        gameData.put("distractEvents", game.getDistractEvents());
         gameData.put("paused", game.isPaused());
 
         String[] names = room.getPlayers().stream().map(Player::getNickname).toArray(String[]::new);
@@ -165,6 +171,25 @@ public class TetrisService {
         int target = aliveTargets.get(Math.floorMod(cursor, aliveTargets.size()));
         game.getTargetCursors().put(playerIndex, cursor + 1);
         return target;
+    }
+
+    private void distract(TetrisGame game, int from, Object payload) {
+        if (!(payload instanceof Map<?, ?> map)) return;
+        int target = toInt(map.get("target"), -1);
+        if (target < 0 || target == from) return;
+        TetrisPlayerState targetState = game.getPlayerStates().get(target);
+        if (targetState == null || targetState.isGameOver()) return;
+        Map<String, Object> event = new HashMap<>();
+        long now = System.currentTimeMillis();
+        event.put("eventId", "shake:" + from + ":" + target + ":" + now + ":" + game.getDistractEvents().size());
+        event.put("type", "shake");
+        event.put("from", from);
+        event.put("target", target);
+        event.put("timestamp", now);
+        game.getDistractEvents().add(event);
+        while (game.getDistractEvents().size() > MAX_DISTRACT_EVENTS) {
+            game.getDistractEvents().remove(0);
+        }
     }
 
     private void rememberAttackKey(TetrisGame game, String attackKey) {
