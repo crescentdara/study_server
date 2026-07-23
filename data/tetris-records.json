@@ -1,0 +1,31 @@
+{
+  "completedMatchIds" : [ "3d93d7c8-4834-45a6-962b-076329e471a2" ],
+  "players" : {
+    "거북이" : {
+      "nickname" : "거북이",
+      "matches" : 1,
+      "wins" : 1,
+      "losses" : 0,
+      "opponents" : {
+        "123" : {
+          "nickname" : "123",
+          "wins" : 1,
+          "losses" : 0
+        }
+      }
+    },
+    "123" : {
+      "nickname" : "123",
+      "matches" : 1,
+      "wins" : 0,
+      "losses" : 1,
+      "opponents" : {
+        "거북이" : {
+          "nickname" : "거북이",
+          "wins" : 0,
+          "losses" : 1
+        }
+      }
+    }
+  }
+}

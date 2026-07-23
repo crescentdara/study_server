@@ -19,6 +19,12 @@ public class TetrisService {
     private static final int MAX_PROCESSED_ATTACK_KEYS = 500;
     private static final int MAX_ATTACK_LOG = 20;
     private static final int MAX_DISTRACT_EVENTS = 40;
+    private static final int MAX_ATTACK_EVENTS_PER_SYNC = 64;
+    private final TetrisRecordService recordService;
+
+    public TetrisService(TetrisRecordService recordService) {
+        this.recordService = recordService;
+    }
 
     public StudyStateResponse processMove(Room room, Player player, StudyMoveRequest request) {
         if (!"TETRIS_SYNC".equals(request.getMoveType()) && !"TETRIS_PAUSE".equals(request.getMoveType()) && !"TETRIS_DISTRACT".equals(request.getMoveType())) {
@@ -30,6 +36,9 @@ public class TetrisService {
             room.setGameData(game);
         }
         if ("TETRIS_PAUSE".equals(request.getMoveType())) {
+            if (player.getPlayerIndex() != 0) {
+                throw new IllegalArgumentException("Only the host can pause TETRIS.");
+            }
             game.setPaused(readPaused(request.getPayload(), !game.isPaused()));
             return buildInitialState(room);
         }
@@ -61,13 +70,22 @@ public class TetrisService {
         gameData.put("attackLog", game.getAttackLog());
         gameData.put("distractEvents", game.getDistractEvents());
         gameData.put("paused", game.isPaused());
+        gameData.put("aborted", game.isAborted());
+        gameData.put("abortReason", game.getAbortReason());
+        gameData.put("previousAbortReason", game.getPreviousAbortReason());
+        gameData.put("finalRanking", game.getFinalRanking());
 
         String[] names = room.getPlayers().stream().map(Player::getNickname).toArray(String[]::new);
+        gameData.put("records", recordService.recordsFor(List.of(names)));
         return StudyStateResponse.builder()
                 .roomId(room.getRoomId())
                 .studyType(StudyType.TETRIS)
                 .status(room.getStatus())
-                .message(room.getStatus() == StudyStatus.FINISHED ? "TETRIS queue monitor finished." : "TETRIS queue monitor synced.")
+                .message(game.isAborted()
+                        ? "TETRIS_ABORTED: " + game.getAbortReason()
+                        : room.getStatus() == StudyStatus.FINISHED
+                        ? "TETRIS queue monitor finished."
+                        : "TETRIS queue monitor synced.")
                 .currentTurn(0)
                 .winner(game.getWinner())
                 .gameData(gameData)
@@ -78,6 +96,10 @@ public class TetrisService {
     @SuppressWarnings("unchecked")
     private void syncState(TetrisGame game, int playerIndex, Object payload) {
         if (!(payload instanceof Map<?, ?> map)) return;
+        if (!(map.get("instanceId") instanceof String instanceId)
+                || !game.getInstanceId().equals(instanceId)) {
+            return;
+        }
 
         TetrisPlayerState state = game.getPlayerStates()
                 .computeIfAbsent(playerIndex, ignored -> new TetrisPlayerState());
@@ -93,6 +115,19 @@ public class TetrisService {
         state.setUpdatedAt(System.currentTimeMillis());
 
         ackAttacks(game, playerIndex, map);
+        handleAttacks(game, playerIndex, map);
+    }
+
+    private void handleAttacks(TetrisGame game, int playerIndex, Map<?, ?> map) {
+        Object attackEvents = map.get("attackEvents");
+        if (attackEvents instanceof List<?> events) {
+            for (Object event : events.stream().limit(MAX_ATTACK_EVENTS_PER_SYNC).toList()) {
+                if (event instanceof Map<?, ?> attack) {
+                    handleAttack(game, playerIndex, attack);
+                }
+            }
+            return;
+        }
         handleAttack(game, playerIndex, map);
     }
 
@@ -230,18 +265,43 @@ public class TetrisService {
 
     private void updateWinner(Room room, TetrisGame game, int playerIndex) {
         TetrisPlayerState state = game.getPlayerStates().get(playerIndex);
-        if (state == null || !state.isGameOver() || game.getWinner() != -1) return;
+        if (state == null || !state.isGameOver() || game.getWinner() != -1 || game.isAborted()) return;
+        if (!game.getEliminationOrder().contains(playerIndex)) {
+            game.getEliminationOrder().add(playerIndex);
+        }
 
         List<Integer> alive = game.getPlayerStates().entrySet().stream()
                 .filter(entry -> !entry.getValue().isGameOver())
                 .map(Map.Entry::getKey)
+                .sorted()
                 .toList();
         if (alive.size() == 1) {
-            game.setWinner(alive.get(0));
+            int winner = alive.get(0);
+            game.setWinner(winner);
+            game.getFinalRanking().clear();
+            game.getFinalRanking().add(winner);
+            for (int index = game.getEliminationOrder().size() - 1; index >= 0; index -= 1) {
+                game.getFinalRanking().add(game.getEliminationOrder().get(index));
+            }
             room.setStatus(StudyStatus.FINISHED);
+            saveRecord(room, game);
         } else if (alive.isEmpty()) {
             room.setStatus(StudyStatus.FINISHED);
         }
+    }
+
+    private void saveRecord(Room room, TetrisGame game) {
+        if (game.isRecordSaved() || game.isAborted() || game.getFinalRanking().size() < 2) return;
+        List<String> ranking = game.getFinalRanking().stream()
+                .map(index -> room.getPlayers().stream()
+                        .filter(player -> player.getPlayerIndex() == index)
+                        .findFirst()
+                        .map(Player::getNickname)
+                        .orElse(""))
+                .toList();
+        if (ranking.stream().anyMatch(String::isBlank)) return;
+        recordService.recordCompletedMatch(game.getInstanceId(), ranking);
+        game.setRecordSaved(true);
     }
 
     private int toInt(Object value, int fallback) {

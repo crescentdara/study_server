@@ -6,16 +6,22 @@ public class AlkkagiStone {
     private double x;
     private double y;
     private boolean active;
+    private String type = "NORMAL";
 
     public AlkkagiStone() {
     }
 
     public AlkkagiStone(int id, int owner, double x, double y, boolean active) {
+        this(id, owner, x, y, active, "NORMAL");
+    }
+
+    public AlkkagiStone(int id, int owner, double x, double y, boolean active, String type) {
         this.id = id;
         this.owner = owner;
         this.x = x;
         this.y = y;
         this.active = active;
+        this.type = type;
     }
 
     public int getId() { return id; }
@@ -32,4 +38,7 @@ public class AlkkagiStone {
 
     public boolean isActive() { return active; }
     public void setActive(boolean active) { this.active = active; }
+
+    public String getType() { return type; }
+    public void setType(String type) { this.type = type; }
 }

@@ -5,6 +5,7 @@ import com.studyplatform.model.Player;
 import com.studyplatform.model.Room;
 import com.studyplatform.service.RoomService;
 import com.studyplatform.service.SessionRegistry;
+import com.studyplatform.service.TetrisService;
 import org.springframework.context.event.EventListener;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Component;
@@ -15,13 +16,16 @@ public class WebSocketEventListener {
 
     private final RoomService roomService;
     private final SessionRegistry sessionRegistry;
+    private final TetrisService tetrisService;
     private final SimpMessagingTemplate msg;
 
     public WebSocketEventListener(RoomService roomService,
                                   SessionRegistry sessionRegistry,
+                                  TetrisService tetrisService,
                                   SimpMessagingTemplate msg) {
         this.roomService     = roomService;
         this.sessionRegistry = sessionRegistry;
+        this.tetrisService   = tetrisService;
         this.msg             = msg;
     }
 
@@ -54,6 +58,12 @@ public class WebSocketEventListener {
                             .currentTurn(-1).winner(-1)
                             .build());
         } else {
+            if (updated.getStudyType() == com.studyplatform.model.StudyType.TETRIS
+                    && updated.getGameData() instanceof com.studyplatform.model.tetris.TetrisGame game
+                    && game.isAborted()) {
+                msg.convertAndSend("/topic/study/" + roomId, tetrisService.buildInitialState(updated));
+                return;
+            }
             // 일반 플레이어 나감 → 남은 인원 브로드캐스트
             String[] names = updated.getPlayers().stream()
                     .map(Player::getNickname).toArray(String[]::new);

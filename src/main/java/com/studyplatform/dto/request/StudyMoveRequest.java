@@ -29,4 +29,6 @@ public class StudyMoveRequest {
     private String imageUrl;
     private String fileName;
     private Long fileSize;
+    /** 답글 대상 채팅 메시지 id (없으면 일반 메시지) */
+    private Long replyToId;
 }

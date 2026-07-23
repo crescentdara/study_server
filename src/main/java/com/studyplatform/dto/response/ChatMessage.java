@@ -27,4 +27,8 @@ public class ChatMessage {
     private String mentionedNickname; // set when message starts with @nickname
     private boolean voiceRequested;
     private String voiceText;
+    private long id;
+    private Long replyToId;
+    private String replyToNickname;
+    private String replyToText;
 }

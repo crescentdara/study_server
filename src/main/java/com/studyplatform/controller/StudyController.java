@@ -187,6 +187,12 @@ public class StudyController {
                         .currentTurn(-1).winner(-1)
                         .build());
             } else {
+                if (updated.getStudyType() == StudyType.TETRIS
+                        && updated.getGameData() instanceof com.studyplatform.model.tetris.TetrisGame game
+                        && game.isAborted()) {
+                    broadcast(roomId, tetrisService.buildInitialState(updated));
+                    return;
+                }
                 // 일반 플레이어 퇴장 → 남은 인원 정보 브로드캐스트
                 String[] names = updated.getPlayers().stream()
                         .map(Player::getNickname).toArray(String[]::new);
@@ -294,44 +300,58 @@ public class StudyController {
     private ChatMessage buildChatMessage(String nickname, String emoji, StudyMoveRequest request) {
         String type = request.getType() == null ? "TEXT" : request.getType().trim().toUpperCase();
         String text = request.getData();
+        ChatMessage message;
 
         if ("IMAGE".equals(type)) {
             String imageUrl = request.getImageUrl();
             if (imageUrl == null || !imageUrl.startsWith("/uploads/chat/")) return null;
 
-            ChatMessage message = new ChatMessage(nickname, text == null ? "" : text.trim(),
+            message = new ChatMessage(nickname, text == null ? "" : text.trim(),
                     System.currentTimeMillis(), emoji);
             message.setType("IMAGE");
             message.setImageUrl(imageUrl);
             message.setFileName(request.getFileName());
             message.setFileSize(request.getFileSize());
-            return message;
-        }
+        } else {
+            if (text == null || text.trim().isEmpty()) return null;
+            message = new ChatMessage(nickname, text.trim(), System.currentTimeMillis(), emoji);
 
-        if (text == null || text.trim().isEmpty()) return null;
-        ChatMessage msg = new ChatMessage(nickname, text.trim(), System.currentTimeMillis(), emoji);
-
-        // Detect @mention and explicit voice mention.
-        String trimmed = text.trim();
-        if (trimmed.startsWith("/voice ")) {
-            String rest = trimmed.substring("/voice".length()).trim();
-            if (rest.startsWith("@")) {
-                int spaceIdx = rest.indexOf(' ');
-                String mentioned = spaceIdx > 0 ? rest.substring(1, spaceIdx) : rest.substring(1);
-                String voiceText = spaceIdx > 0 ? rest.substring(spaceIdx + 1).trim() : "";
-                if (!mentioned.isEmpty()) msg.setMentionedNickname(mentioned);
-                if (!voiceText.isEmpty()) {
-                    msg.setVoiceRequested(true);
-                    msg.setVoiceText(voiceText.length() > 80 ? voiceText.substring(0, 80) : voiceText);
+            // Detect @mention and explicit voice mention.
+            String trimmed = text.trim();
+            if (trimmed.startsWith("/voice ")) {
+                String rest = trimmed.substring("/voice".length()).trim();
+                if (rest.startsWith("@")) {
+                    int spaceIdx = rest.indexOf(' ');
+                    String mentioned = spaceIdx > 0 ? rest.substring(1, spaceIdx) : rest.substring(1);
+                    String voiceText = spaceIdx > 0 ? rest.substring(spaceIdx + 1).trim() : "";
+                    if (!mentioned.isEmpty()) message.setMentionedNickname(mentioned);
+                    if (!voiceText.isEmpty()) {
+                        message.setVoiceRequested(true);
+                        message.setVoiceText(voiceText.length() > 80 ? voiceText.substring(0, 80) : voiceText);
+                    }
                 }
+            } else if (trimmed.startsWith("@")) {
+                int spaceIdx = trimmed.indexOf(' ');
+                String mentioned = spaceIdx > 0 ? trimmed.substring(1, spaceIdx) : trimmed.substring(1);
+                if (!mentioned.isEmpty()) message.setMentionedNickname(mentioned);
             }
-        } else if (trimmed.startsWith("@")) {
-            int spaceIdx = trimmed.indexOf(' ');
-            String mentioned = spaceIdx > 0 ? trimmed.substring(1, spaceIdx) : trimmed.substring(1);
-            if (!mentioned.isEmpty()) msg.setMentionedNickname(mentioned);
         }
 
-        return msg;
+        message.setId(chatHistoryService.nextId());
+        applyReplyTo(message, request.getReplyToId());
+        return message;
+    }
+
+    /** 답글 대상 메시지를 이력에서 찾아 닉네임/본문 스냅샷을 붙인다. */
+    private void applyReplyTo(ChatMessage message, Long replyToId) {
+        if (replyToId == null) return;
+        ChatMessage original = chatHistoryService.findLobbyById(replyToId);
+        if (original == null) return;
+
+        message.setReplyToId(original.getId());
+        message.setReplyToNickname(original.getNickname());
+        String snippet = "IMAGE".equals(original.getType()) ? "사진" : original.getText();
+        message.setReplyToText(snippet != null && snippet.length() > 80 ? snippet.substring(0, 80) + "…" : snippet);
     }
 
     private void broadcast(String roomId, StudyStateResponse response) {

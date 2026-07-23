@@ -63,7 +63,7 @@ public class RoomService {
                 : Math.max(2, Math.min(6, maxPlayers)));
         room.setDigits(digits);
         room.setBoardSize(studyType == StudyType.OMOK ? 19 : studyType == StudyType.TETRIS || studyType == StudyType.INCIDENT_AVOID || studyType == StudyType.BREAKOUT ? 20 : boardSize);
-        room.getPlayers().add(new Player(sessionId, nickname, 0));
+        room.getPlayers().add(new Player(sessionId, nickname == null ? "" : nickname.trim(), 0));
         rooms.put(room.getRoomId(), room);
         return room;
     }
@@ -82,13 +82,14 @@ public class RoomService {
         // 같은 세션이 이미 입장해 있으면 중복 추가 방지 (나갔다 들어오는 경우)
         if (room.getPlayerBySession(sessionId) != null)
             throw new RuntimeException("Already in this room.");
+        String normalizedNickname = nickname == null ? "" : nickname.trim();
         boolean duplicateNickname = room.getPlayers().stream()
-                .anyMatch(player -> player.getNickname().equals(nickname));
+                .anyMatch(player -> player.getNickname().equalsIgnoreCase(normalizedNickname));
         if (duplicateNickname)
             throw new RuntimeException("Nickname already exists in this room.");
 
         int nextIndex = room.getPlayers().size();
-        room.getPlayers().add(new Player(sessionId, nickname, nextIndex));
+        room.getPlayers().add(new Player(sessionId, normalizedNickname, nextIndex));
         // 상태는 WAITING 유지 — 방장이 직접 시작해야 함
         return room;
     }
@@ -137,7 +138,18 @@ public class RoomService {
         if (room.getStatus() == StudyStatus.WAITING)
             throw new RuntimeException("Game has not started yet.");
 
+        String previousAbortReason = "";
+        if (room.getStudyType() == StudyType.TETRIS
+                && room.getStatus() == StudyStatus.PLAYING
+                && room.getGameData() instanceof TetrisGame game) {
+            game.setAborted(true);
+            game.setAbortReason("The host restarted before the match finished.");
+            previousAbortReason = game.getAbortReason();
+        }
         initGameData(room);         // 새 게임 데이터 생성
+        if (!previousAbortReason.isBlank() && room.getGameData() instanceof TetrisGame nextGame) {
+            nextGame.setPreviousAbortReason(previousAbortReason);
+        }
         boolean directPlay = room.getStudyType() == StudyType.OMOK
                           || room.getStudyType() == StudyType.TETRIS
                           || room.getStudyType() == StudyType.INCIDENT_AVOID
@@ -218,6 +230,14 @@ public class RoomService {
         // 해당 세션의 플레이어 탐색
         Player leaving = room.getPlayerBySession(sessionId);
         if (leaving == null) return room; // 이미 나간 플레이어 → 무시
+
+        if (room.getStudyType() == StudyType.TETRIS
+                && room.getStatus() == StudyStatus.PLAYING
+                && room.getGameData() instanceof TetrisGame game) {
+            game.setAborted(true);
+            game.setAbortReason(leaving.getNickname() + " left before the match finished.");
+            room.setStatus(StudyStatus.FINISHED);
+        }
 
         boolean isHost = (leaving.getPlayerIndex() == 0);
 

@@ -100,8 +100,12 @@ public class AlkkagiService {
         data.put("turnTimeLimitMs", game.getTurnTimeLimitMs());
         data.put("shotLog", game.getShotLog());
         data.put("mapType", game.getMapType());
+        data.put("mapSeed", game.getMapSeed());
+        data.put("mapPhase", game.getMapPhase());
         data.put("stones", game.getStones());
         data.put("activeShot", game.getActiveShot());
+        data.put("activeShotStartedAt", game.getActiveShotStartedAt());
+        data.put("shotResultTimeoutMs", AlkkagiGame.SHOT_RESULT_TIMEOUT_MS);
         return data;
     }
 
