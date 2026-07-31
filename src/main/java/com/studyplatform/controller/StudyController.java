@@ -156,6 +156,7 @@ public class StudyController {
         broadcast(roomId, state);
         sendCatchMindSecret(room);
         sendRummikubPrivateState(room);
+        sendDaVinciPrivateState(room);
     }
 
     /**
@@ -224,6 +225,7 @@ public class StudyController {
             broadcast(roomId, state);
             sendCatchMindSecret(room);
             sendRummikubPrivateState(room);
+            sendDaVinciPrivateState(room);
             return;
         }
 
@@ -241,13 +243,15 @@ public class StudyController {
             broadcast(roomId, state);
             sendCatchMindSecret(room);
             sendRummikubPrivateState(room);
+            sendDaVinciPrivateState(room);
             return;
         }
 
         // ── 일반 게임 액션 (SET_SECRET / GUESS / SET_BOARD / CALL_TOPIC) ──
         // Ubongo: players continue independently even after someone wins
         boolean isUbongoMove = "UBONGO_PLACE".equals(moveType) || "UBONGO_REMOVE".equals(moveType);
-        if (room.getStatus() == StudyStatus.FINISHED && !isUbongoMove) { broadcastError(roomId, "Game already finished."); return; }
+        boolean isDaVinciFinisher = room.getStudyType() == StudyType.DAVINCI_CODE && "DAVINCI_FINISHER".equals(moveType);
+        if (room.getStatus() == StudyStatus.FINISHED && !isUbongoMove && !isDaVinciFinisher) { broadcastError(roomId, "Game already finished."); return; }
         if (room.getStatus() == StudyStatus.WAITING)  { broadcastError(roomId, "Game has not started yet."); return; }
 
         try {
@@ -270,6 +274,7 @@ public class StudyController {
             broadcast(roomId, response);
             sendCatchMindSecret(room);
             sendRummikubPrivateState(room);
+            sendDaVinciPrivateState(room);
         } catch (IllegalArgumentException | IllegalStateException e) {
             broadcastError(roomId, room, e.getMessage());
         } catch (RuntimeException e) {
@@ -394,6 +399,17 @@ public class StudyController {
         }
         for (Player player : room.getPlayers()) {
             StudyStateResponse privateState = rummikubService.buildPlayerState(room, player);
+            if (privateState == null) continue;
+            msg.convertAndSend("/topic/study/" + room.getRoomId() + "/secret/" + player.getSessionId(), privateState);
+        }
+    }
+
+    private void sendDaVinciPrivateState(Room room) {
+        if (room == null || room.getStudyType() != StudyType.DAVINCI_CODE || room.getStatus() == StudyStatus.WAITING) {
+            return;
+        }
+        for (Player player : room.getPlayers()) {
+            StudyStateResponse privateState = daVinciService.buildPlayerState(room, player);
             if (privateState == null) continue;
             msg.convertAndSend("/topic/study/" + room.getRoomId() + "/secret/" + player.getSessionId(), privateState);
         }

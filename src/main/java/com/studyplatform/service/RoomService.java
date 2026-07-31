@@ -51,8 +51,8 @@ public class RoomService {
                 ? studyType.name() + "-" + java.util.UUID.randomUUID().toString().substring(0, 4)
                 : roomName.trim();
         Room room = new Room(safeRoomName, studyType);
-        // TETRIS/INCIDENT_AVOID/BREAKOUT=3명 고정, OMOK=2명 고정, RUSH_HOUR=1~3명, OLDMAID=2~7명, 나머지=2~6명
-        room.setMaxPlayers(studyType == StudyType.TETRIS ? 4
+        // TETRIS=최대 3명(2명부터 시작), INCIDENT_AVOID/BREAKOUT=3명 고정, OMOK=2명 고정, RUSH_HOUR=1~3명, OLDMAID=2~7명, 나머지=2~6명
+        room.setMaxPlayers(studyType == StudyType.TETRIS ? 3
                 : studyType == StudyType.INCIDENT_AVOID || studyType == StudyType.BREAKOUT ? 3
                 : studyType == StudyType.OMOK      ? 2
                 : studyType == StudyType.ALKKAGI   ? Math.max(1, Math.min(3, maxPlayers))
@@ -100,7 +100,7 @@ public class RoomService {
      * 현재 입장한 인원 수(n)로 게임 데이터를 초기화합니다.
      * maxPlayers를 다 채우지 않아도 시작 가능합니다.
      *
-     * @throws RuntimeException 2명 미만이거나 이미 시작된 경우
+     * @throws RuntimeException 게임별 최소 인원을 충족하지 못했거나 이미 시작된 경우
      */
     public void startGame(Room room) {
         if (room.getStudyType() != StudyType.TETRIS && room.getStudyType() != StudyType.INCIDENT_AVOID && room.getStudyType() != StudyType.BREAKOUT && room.getStudyType() != StudyType.RUSH_HOUR && room.getStudyType() != StudyType.UBONGO && room.getStudyType() != StudyType.ALKKAGI && room.getPlayers().size() < 2)
@@ -187,7 +187,7 @@ public class RoomService {
 
     private void normalizeRoomConfig(Room room) {
         if (room.getStudyType() == StudyType.TETRIS) {
-            room.setMaxPlayers(4);
+            room.setMaxPlayers(3);
             room.setBoardSize(20);
         } else if (room.getStudyType() == StudyType.INCIDENT_AVOID || room.getStudyType() == StudyType.BREAKOUT) {
             room.setMaxPlayers(3);

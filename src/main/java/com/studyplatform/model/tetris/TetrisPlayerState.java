@@ -14,4 +14,14 @@ public class TetrisPlayerState {
     private boolean running = true;
     private boolean gameOver = false;
     private long updatedAt = System.currentTimeMillis();
+
+    public TetrisPlayerState() {
+        for (int rowIndex = 0; rowIndex < 20; rowIndex += 1) {
+            List<String> row = new ArrayList<>(10);
+            for (int colIndex = 0; colIndex < 10; colIndex += 1) {
+                row.add("");
+            }
+            board.add(row);
+        }
+    }
 }

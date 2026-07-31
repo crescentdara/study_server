@@ -12,6 +12,26 @@ public class AlkkagiGame {
     private static final double STONE_RADIUS_X = 15.0 / 1200.0;
     private static final double STONE_RADIUS_Y = 15.0 / 760.0;
     private static final double POSITION_EPSILON = 0.00001;
+    private static final List<String> MAP_TYPES = Arrays.asList(
+            "CLASSIC",
+            "CENTER_HOLE",
+            "CORNER_HOLES",
+            "SIDE_POCKETS",
+            "PILLARS",
+            "BUMPER_FIELD",
+            "PINBALL",
+            "NARROW_BRIDGE",
+            "RIVER",
+            "ICE_SAND",
+            "ELASTIC_WALLS",
+            "MAGNET_FIELD",
+            "DONUT_RING",
+            "OFFICE_DESK",
+            "ROULETTE_ARENA",
+            "TYPHOON_ISLAND",
+            "PORTAL_MAZE",
+            "COLLAPSE_ICE"
+    );
     private final int numPlayers;
     private final List<AlkkagiStone> stones = new ArrayList<>();
     private final List<String> shotLog = new ArrayList<>();
@@ -27,25 +47,14 @@ public class AlkkagiGame {
     private AlkkagiShot activeShot = null;
 
     public AlkkagiGame(int numPlayers) {
+        this(numPlayers, new Random().nextLong());
+    }
+
+    AlkkagiGame(int numPlayers, long mapSeed) {
         this.numPlayers = Math.max(1, Math.min(3, numPlayers));
-        this.mapSeed = new Random().nextLong();
+        this.mapSeed = mapSeed;
         Random random = new Random(mapSeed);
-        List<String> maps = this.numPlayers == 3 ? Arrays.asList("HEX_ARENA", "HEX_TYPHOON", "HEX_RUINS") : Arrays.asList(
-                "CLASSIC",
-                "CENTER_HOLE",
-                "CORNER_HOLES",
-                "SIDE_POCKETS",
-                "PILLARS",
-                "BUMPER_FIELD",
-                "PINBALL",
-                "NARROW_BRIDGE",
-                "RIVER",
-                "ROULETTE_ARENA",
-                "TYPHOON_ISLAND",
-                "PORTAL_MAZE",
-                "COLLAPSE_ICE"
-        );
-        this.mapType = maps.get(random.nextInt(maps.size()));
+        this.mapType = MAP_TYPES.get(random.nextInt(MAP_TYPES.size()));
         initStones(random);
     }
 
@@ -54,11 +63,12 @@ public class AlkkagiGame {
         List<String> specialPool = Arrays.asList(
                 "HEAVY", "SLIPPERY", "BOMB", "LIGHT",
                 "BLACK_HOLE", "WARP", "SPLIT", "GHOST",
-                "LIGHTNING", "CURSE", "ROULETTE", "MINE"
+                "LIGHTNING", "CURSE", "ROULETTE", "MINE",
+                "BOUNCY", "SPRING"
         );
         for (int owner = 0; owner < numPlayers; owner++) {
             int stoneCount = 6;
-            int specialCount = random.nextInt(stoneCount + 1);
+            int specialCount = 2 + random.nextInt(4);
             List<String> types = new ArrayList<>(Collections.nCopies(stoneCount, "NORMAL"));
             for (int index = 0; index < specialCount; index++) {
                 types.set(index, specialPool.get(random.nextInt(specialPool.size())));
@@ -76,6 +86,7 @@ public class AlkkagiGame {
         if (numPlayers == 3) {
             if (owner == 0) return new double[]{0.16, 0.50 + spread * 0.48};
             if (owner == 1) return new double[]{0.84, 0.50 - spread * 0.48};
+            if ("NARROW_BRIDGE".equals(mapType)) return new double[]{0.50, 0.50 + spread * 0.24};
             return new double[]{0.50 + spread * 0.42, 0.15};
         }
         if (owner == 0) return new double[]{0.14, 0.50 + spread * 0.58};
@@ -237,6 +248,7 @@ public class AlkkagiGame {
                 || inHole(x, y, 0.10, 0.88, 44.0) || inHole(x, y, 0.90, 0.88, 44.0))) return true;
         if ("SIDE_POCKETS".equals(mapType) && (inHole(x, y, 0.06, 0.50, 48.0) || inHole(x, y, 0.94, 0.50, 48.0)
                 || inHole(x, y, 0.50, 0.08, 38.0) || inHole(x, y, 0.50, 0.92, 38.0))) return true;
+        if ("DONUT_RING".equals(mapType) && inHole(x, y, 0.50, 0.50, 126.0)) return true;
         if ("NARROW_BRIDGE".equals(mapType) && x > 0.38 && x < 0.62 && !(y > 0.33 && y < 0.67)) return true;
         if ("RIVER".equals(mapType) && y > 0.42 && y < 0.58 && !((x > 0.36 && x < 0.44) || (x > 0.56 && x < 0.64))) return true;
         return false;

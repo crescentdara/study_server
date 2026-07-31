@@ -3,6 +3,8 @@ package com.studyplatform.model.davinci;
 import java.util.*;
 
 public class DaVinciGame {
+    public static final int HIDDEN_BLACK = -2;
+    public static final int HIDDEN_WHITE = -3;
     // tile ID: 0-11=black 0-11, 12-23=white 0-11, 24=black joker, 25=white joker
     private final List<Integer> pool;
     private final List<List<Integer>> playerTiles;
@@ -11,6 +13,23 @@ public class DaVinciGame {
     private int currentTurn;
     private int winner = -1;
     private final int numPlayers;
+    private final String gameId = UUID.randomUUID().toString();
+    private long messageEventId;
+    private long eliminationEventId;
+    private long executionEventId;
+    private int lastEliminatedPlayer = -1;
+    private int lastEliminatorPlayer = -1;
+    private boolean finisherPending;
+    private String executionStyle = "";
+    private String executionTaunt = "";
+
+    private static final Set<String> FINISHER_STYLES = Set.of("TERMINATE", "TRASH", "SHRED", "ACCESS_DENIED");
+    private static final List<String> FINISHER_TAUNTS = List.of(
+            "숫자가 12개뿐인데 그걸 못 맞혀?",
+            "삭제 완료. 복구할 가치 없음.",
+            "패를 숨긴 게 아니라 실력을 숨겼네.",
+            "추리 능력이 최소 사양을 충족하지 못했습니다."
+    );
 
     // Turn state
     private Integer pendingTileId = null;     // drawn from pool, not yet placed
@@ -55,10 +74,18 @@ public class DaVinciGame {
     }
 
     public DaVinciGame(int numPlayers) {
+        this(numPlayers, shuffledDeck());
+    }
+
+    /** Deterministic deck constructor used by rule tests. */
+    public DaVinciGame(int numPlayers, List<Integer> deck) {
+        if (numPlayers < 2 || numPlayers > 4) throw new IllegalArgumentException("Da Vinci Code requires 2-4 players");
+        if (deck == null || deck.size() != 26 || new HashSet<>(deck).size() != 26
+                || deck.stream().anyMatch(id -> id < 0 || id > 25)) {
+            throw new IllegalArgumentException("Deck must contain every tile id from 0 to 25 exactly once");
+        }
         this.numPlayers = numPlayers;
-        pool = new ArrayList<>();
-        for (int i = 0; i < 26; i++) pool.add(i);
-        Collections.shuffle(pool);
+        pool = new ArrayList<>(deck);
 
         playerTiles = new ArrayList<>();
         revealed    = new ArrayList<>();
@@ -74,6 +101,13 @@ public class DaVinciGame {
             revealed.add(rev);
         }
         currentTurn = 0;
+    }
+
+    private static List<Integer> shuffledDeck() {
+        List<Integer> deck = new ArrayList<>();
+        for (int i = 0; i < 26; i++) deck.add(i);
+        Collections.shuffle(deck);
+        return deck;
     }
 
     private static void sortRow(List<Integer> tiles, List<Boolean> revs) {
@@ -100,6 +134,7 @@ public class DaVinciGame {
 
     /** Draw a tile from pool — stores as pendingTileId (not yet placed in row). */
     public String drawTile(int playerIndex) {
+        if (finisherPending) return "Choose a finisher first";
         if (playerIndex != currentTurn) return "Not your turn";
         if (drawnTileId != null || pendingTileId != null) return "Already drew this turn";
         if (pool.isEmpty()) return "Pool is empty";
@@ -111,6 +146,7 @@ public class DaVinciGame {
 
     /** Place the pending tile at the given position in the player's row. */
     public String placeTile(int playerIndex, int position) {
+        if (finisherPending) return "Choose a finisher first";
         if (playerIndex != currentTurn) return "Not your turn";
         if (pendingTileId == null) return "No tile to place";
         List<Integer> row = playerTiles.get(playerIndex);
@@ -131,6 +167,7 @@ public class DaVinciGame {
      * Pool-empty rule: if pool was empty this turn (no pending/drawn tile), guess is allowed directly.
      */
     public String guess(int playerIndex, int targetPlayer, int targetPos, int guessedNumber) {
+        if (finisherPending) return "Choose a finisher first";
         if (playerIndex != currentTurn) return "Not your turn";
         if (pendingTileId != null) return "Must place your tile before guessing";
         // Must have drawn unless pool was empty (drawnTileId==null means pool was empty skip)
@@ -151,6 +188,14 @@ public class DaVinciGame {
         if (correct) {
             tRev.set(targetPos, true);
             correctGuessesThisTurn++;
+            if (isEliminated(targetPlayer)) {
+                lastEliminatedPlayer = targetPlayer;
+                lastEliminatorPlayer = playerIndex;
+                finisherPending = true;
+                executionStyle = "";
+                executionTaunt = "";
+                eliminationEventId++;
+            }
             checkWin();
             return null;
         } else {
@@ -170,11 +215,25 @@ public class DaVinciGame {
     }
 
     public String pass(int playerIndex) {
+        if (finisherPending) return "Choose a finisher first";
         if (playerIndex != currentTurn) return "Not your turn";
         if (pendingTileId != null) return "Must place your tile before passing";
         if (drawnTileId == null && !pool.isEmpty()) return "Must draw first";
         if (correctGuessesThisTurn == 0) return "Must guess at least once before passing";
         advanceTurn();
+        return null;
+    }
+
+    public String executeFinisher(int playerIndex, String style, int tauntId) {
+        if (!finisherPending) return "No finisher is pending";
+        if (playerIndex != lastEliminatorPlayer) return "Only the eliminator can choose the finisher";
+        String normalizedStyle = style == null ? "" : style.trim().toUpperCase(Locale.ROOT);
+        if (!FINISHER_STYLES.contains(normalizedStyle)) return "Invalid finisher style";
+        if (tauntId < 0 || tauntId >= FINISHER_TAUNTS.size()) return "Invalid taunt";
+        executionStyle = normalizedStyle;
+        executionTaunt = FINISHER_TAUNTS.get(tauntId);
+        finisherPending = false;
+        executionEventId++;
         return null;
     }
 
@@ -217,4 +276,14 @@ public class DaVinciGame {
     public Integer getDrawnTileId()          { return drawnTileId; }
     public boolean isDrawnRevealed()         { return drawnRevealed; }
     public int getCorrectGuessesThisTurn()   { return correctGuessesThisTurn; }
+    public String getGameId()                { return gameId; }
+    public long getMessageEventId()          { return messageEventId; }
+    public long nextMessageEventId()         { return ++messageEventId; }
+    public long getEliminationEventId()      { return eliminationEventId; }
+    public long getExecutionEventId()        { return executionEventId; }
+    public int getLastEliminatedPlayer()     { return lastEliminatedPlayer; }
+    public int getLastEliminatorPlayer()     { return lastEliminatorPlayer; }
+    public boolean isFinisherPending()       { return finisherPending; }
+    public String getExecutionStyle()        { return executionStyle; }
+    public String getExecutionTaunt()        { return executionTaunt; }
 }

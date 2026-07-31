@@ -155,6 +155,74 @@ class TetrisServiceTest {
     }
 
     @Test
+    void syncWithoutInstanceIdStillUpdatesBoardForCompatibleClients() {
+        Room room = playingRoom(2);
+        TetrisGame game = (TetrisGame) room.getGameData();
+        List<List<String>> board = emptyBoard();
+        board.get(0).set(4, "T");
+
+        service.processMove(
+                room,
+                room.getPlayers().get(0),
+                request("TETRIS_SYNC", Map.of(
+                        "board", board,
+                        "score", 120,
+                        "gameOver", false,
+                        "attackEvents", List.of(attack("compatible-attack", 2, 1))
+                ))
+        );
+
+        assertThat(game.getPlayerStates().get(0).getBoard()).isEqualTo(board);
+        assertThat(game.getPlayerStates().get(0).getScore()).isEqualTo(120);
+        assertThat(game.getGarbageQueues().get(1))
+                .extracting(entry -> entry.get("lines"))
+                .containsExactly(1);
+    }
+
+    @Test
+    void playerBoardsStartAtTwentyByTenAndMalformedSyncCannotReplaceThem() {
+        Room room = playingRoom(2);
+        TetrisGame game = (TetrisGame) room.getGameData();
+
+        assertThat(game.getPlayerStates().get(0).getBoard()).hasSize(20);
+        assertThat(game.getPlayerStates().get(0).getBoard()).allSatisfy(row -> assertThat(row).hasSize(10));
+
+        service.processMove(
+                room,
+                room.getPlayers().get(0),
+                syncRequest(room, Map.of("board", List.of(List.of("T", "", "")), "gameOver", false))
+        );
+
+        assertThat(game.getPlayerStates().get(0).getBoard()).hasSize(20);
+        assertThat(game.getPlayerStates().get(0).getBoard()).allSatisfy(row -> assertThat(row).hasSize(10));
+    }
+
+    @Test
+    void firstGameOverSyncIsIgnoredUntilPlayerSendsHealthyState() {
+        Room room = playingRoom(2);
+        TetrisGame restartedGame = new TetrisGame(2);
+        room.setGameData(restartedGame);
+
+        service.processMove(room, room.getPlayers().get(1),
+                syncRequest(room, Map.of("gameOver", true)));
+
+        assertThat(restartedGame.getPlayerStates().get(1).isGameOver()).isFalse();
+        assertThat(room.getStatus()).isEqualTo(StudyStatus.PLAYING);
+
+        service.processMove(room, room.getPlayers().get(1),
+                syncRequest(room, Map.of("gameOver", false)));
+        service.processMove(room, room.getPlayers().get(1),
+                syncRequest(room, Map.of("gameOver", true)));
+
+        assertThat(restartedGame.getPlayerStates().get(1).isGameOver()).isTrue();
+        assertThat(restartedGame.getWinner()).isZero();
+        assertThat(recordService.recordsFor(List.of("player-0")).get("player-0"))
+                .containsEntry("wins", 1)
+                .containsEntry("matches", 1)
+                .containsEntry("placementGames", 1);
+    }
+
+    @Test
     void onlyHostCanPauseTheWholeGame() {
         Room room = playingRoom(2);
 
@@ -180,7 +248,11 @@ class TetrisServiceTest {
         for (int index = 0; index < playerCount; index += 1) {
             room.getPlayers().add(new Player("session-" + index, "player-" + index, index));
         }
-        room.setGameData(new TetrisGame(playerCount));
+        TetrisGame game = new TetrisGame(playerCount);
+        for (int index = 0; index < playerCount; index += 1) {
+            game.getReadyPlayers().add(index);
+        }
+        room.setGameData(game);
         room.setStatus(StudyStatus.PLAYING);
         return room;
     }
@@ -208,5 +280,13 @@ class TetrisServiceTest {
                 "b2b", false,
                 "perfectClear", false
         );
+    }
+
+    private List<List<String>> emptyBoard() {
+        List<List<String>> board = new java.util.ArrayList<>();
+        for (int row = 0; row < 20; row += 1) {
+            board.add(new java.util.ArrayList<>(java.util.Collections.nCopies(10, "")));
+        }
+        return board;
     }
 }

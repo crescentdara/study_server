@@ -10,6 +10,7 @@ import com.studyplatform.model.tetris.TetrisGame;
 import com.studyplatform.model.tetris.TetrisPlayerState;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -62,6 +63,7 @@ public class TetrisService {
         gameData.put("rows", game.getRows());
         gameData.put("cols", game.getCols());
         gameData.put("numPlayers", game.getNumPlayers());
+        gameData.put("rankedMatch", game.getNumPlayers() >= 2);
         gameData.put("instanceId", game.getInstanceId());
         gameData.put("playerStates", game.getPlayerStates());
         gameData.put("garbageQueues", game.getGarbageQueues());
@@ -96,26 +98,51 @@ public class TetrisService {
     @SuppressWarnings("unchecked")
     private void syncState(TetrisGame game, int playerIndex, Object payload) {
         if (!(payload instanceof Map<?, ?> map)) return;
-        if (!(map.get("instanceId") instanceof String instanceId)
-                || !game.getInstanceId().equals(instanceId)) {
+        Object requestedInstance = map.get("instanceId");
+        if (requestedInstance instanceof String instanceId
+                && !instanceId.isBlank()
+                && !game.getInstanceId().equals(instanceId)) {
             return;
         }
 
         TetrisPlayerState state = game.getPlayerStates()
                 .computeIfAbsent(playerIndex, ignored -> new TetrisPlayerState());
+        boolean requestedGameOver = toBoolean(map.get("gameOver"), state.isGameOver());
+        if (requestedGameOver && !game.getReadyPlayers().contains(playerIndex)) {
+            return;
+        }
+        if (!requestedGameOver) {
+            game.getReadyPlayers().add(playerIndex);
+        }
         Object board = map.get("board");
-        if (board instanceof List<?> rows) {
-            state.setBoard((List<List<String>>) rows);
+        List<List<String>> validatedBoard = validatedBoard(board, game.getRows(), game.getCols());
+        if (validatedBoard != null) {
+            state.setBoard(validatedBoard);
         }
         state.setScore(toInt(map.get("score"), state.getScore()));
         state.setLines(toInt(map.get("lines"), state.getLines()));
         state.setCycle(toInt(map.get("cycle"), state.getCycle()));
         state.setRunning(toBoolean(map.get("running"), state.isRunning()));
-        state.setGameOver(toBoolean(map.get("gameOver"), state.isGameOver()));
+        state.setGameOver(requestedGameOver);
         state.setUpdatedAt(System.currentTimeMillis());
 
         ackAttacks(game, playerIndex, map);
         handleAttacks(game, playerIndex, map);
+    }
+
+    private List<List<String>> validatedBoard(Object value, int expectedRows, int expectedCols) {
+        if (!(value instanceof List<?> rows) || rows.size() != expectedRows) return null;
+        List<List<String>> board = new ArrayList<>(expectedRows);
+        for (Object rowValue : rows) {
+            if (!(rowValue instanceof List<?> row) || row.size() != expectedCols) return null;
+            List<String> cells = new ArrayList<>(expectedCols);
+            for (Object cell : row) {
+                if (!(cell instanceof String text)) return null;
+                cells.add(text);
+            }
+            board.add(cells);
+        }
+        return board;
     }
 
     private void handleAttacks(TetrisGame game, int playerIndex, Map<?, ?> map) {

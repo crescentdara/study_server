@@ -20,6 +20,16 @@ import java.util.Set;
 
 @Service
 public class TetrisRecordService {
+    private static final int PLACEMENT_MATCHES = 5;
+    private static final int INITIAL_RATING = 800;
+    private static final int PLACEMENT_K_FACTOR = 80;
+    private static final int RANKED_K_FACTOR = 32;
+    private static final double LOSS_RP_MULTIPLIER = 0.70;
+    private static final int MASTER_RATING = 2800;
+    private static final int GRANDMASTER_RATING = 3200;
+    private static final int CHALLENGER_RATING = 3600;
+    private static final String[] TIERS = {"IRON", "BRONZE", "SILVER", "GOLD", "PLATINUM", "EMERALD", "DIAMOND"};
+    private static final String[] DIVISIONS = {"IV", "III", "II", "I"};
     private final ObjectMapper objectMapper;
     private final Path recordPath;
     private RecordStore store;
@@ -45,11 +55,20 @@ public class TetrisRecordService {
         Set<String> uniqueNames = new LinkedHashSet<>(names.stream().map(this::key).toList());
         if (uniqueNames.size() != names.size() || store.completedMatchIds.contains(matchId)) return false;
 
+        Map<String, Integer> ratingsBefore = new LinkedHashMap<>();
+        Map<String, String> ranksBefore = new LinkedHashMap<>();
+        for (String name : names) {
+            PlayerRecord record = player(name);
+            ratingsBefore.put(key(name), record.rating);
+            ranksBefore.put(key(name), rankLabel(record));
+        }
+
         for (int index = 0; index < names.size(); index += 1) {
             PlayerRecord player = player(names.get(index));
             player.matches += 1;
             if (index == 0) player.wins += 1;
             else player.losses += 1;
+            updateRank(player, names, index, ratingsBefore, matchId, ranksBefore.get(key(names.get(index))));
         }
 
         for (int higher = 0; higher < names.size(); higher += 1) {
@@ -85,6 +104,18 @@ public class TetrisRecordService {
         result.put("matches", matches);
         result.put("wins", wins);
         result.put("losses", losses);
+        Rank rank = rankOf(player);
+        result.put("placementGames", player == null ? 0 : Math.min(PLACEMENT_MATCHES, player.placementGames));
+        result.put("placementRequired", PLACEMENT_MATCHES);
+        result.put("ranked", rank.ranked());
+        result.put("tier", rank.tier());
+        result.put("division", rank.division());
+        result.put("rp", rank.rp());
+        result.put("lastRankDelta", player == null ? 0 : player.lastRankDelta);
+        result.put("lastRankChanged", player != null && player.lastRankChanged);
+        result.put("lastRankBefore", player == null ? "UNRANKED" : player.lastRankBefore);
+        result.put("lastRankAfter", player == null ? "UNRANKED" : player.lastRankAfter);
+        result.put("lastRankMatchId", player == null ? "" : player.lastRankMatchId);
         Map<String, Object> opponents = new LinkedHashMap<>();
         if (player != null) {
             player.opponents.values().stream()
@@ -103,6 +134,54 @@ public class TetrisRecordService {
         PlayerRecord record = store.players.computeIfAbsent(playerKey, ignored -> new PlayerRecord());
         record.nickname = displayName(nickname);
         return record;
+    }
+
+    private void updateRank(
+            PlayerRecord player,
+            List<String> ranking,
+            int playerPosition,
+            Map<String, Integer> ratingsBefore,
+            String matchId,
+            String rankBefore
+    ) {
+        double actualTotal = 0;
+        double expectedTotal = 0;
+        int ownRating = ratingsBefore.getOrDefault(key(player.nickname), INITIAL_RATING);
+        for (int opponentPosition = 0; opponentPosition < ranking.size(); opponentPosition += 1) {
+            if (opponentPosition == playerPosition) continue;
+            int opponentRating = ratingsBefore.getOrDefault(key(ranking.get(opponentPosition)), INITIAL_RATING);
+            actualTotal += playerPosition < opponentPosition ? 1.0 : 0.0;
+            expectedTotal += 1.0 / (1.0 + Math.pow(10.0, (opponentRating - ownRating) / 400.0));
+        }
+        int opponents = ranking.size() - 1;
+        int kFactor = player.placementGames < PLACEMENT_MATCHES ? PLACEMENT_K_FACTOR : RANKED_K_FACTOR;
+        double rawDelta = kFactor * ((actualTotal / opponents) - (expectedTotal / opponents));
+        int delta = (int) Math.round(rawDelta < 0 ? rawDelta * LOSS_RP_MULTIPLIER : rawDelta);
+        player.rating = Math.max(0, ownRating + delta);
+        player.placementGames = Math.min(PLACEMENT_MATCHES, player.placementGames + 1);
+        player.lastRankDelta = delta;
+        player.lastRankBefore = rankBefore;
+        player.lastRankAfter = rankLabel(player);
+        player.lastRankChanged = !player.lastRankBefore.equals(player.lastRankAfter);
+        player.lastRankMatchId = matchId;
+    }
+
+    private Rank rankOf(PlayerRecord player) {
+        if (player == null || player.placementGames < PLACEMENT_MATCHES) {
+            return new Rank(false, "UNRANKED", "", 0);
+        }
+        int rating = Math.max(0, player.rating);
+        if (rating >= CHALLENGER_RATING) return new Rank(true, "CHALLENGER", "", rating - MASTER_RATING);
+        if (rating >= GRANDMASTER_RATING) return new Rank(true, "GRANDMASTER", "", rating - MASTER_RATING);
+        if (rating >= MASTER_RATING) return new Rank(true, "MASTER", "", rating - MASTER_RATING);
+        int tierIndex = Math.min(TIERS.length - 1, rating / 400);
+        int withinTier = rating % 400;
+        return new Rank(true, TIERS[tierIndex], DIVISIONS[Math.min(3, withinTier / 100)], withinTier % 100);
+    }
+
+    private String rankLabel(PlayerRecord player) {
+        Rank rank = rankOf(player);
+        return rank.ranked() ? rank.tier() + (rank.division().isBlank() ? "" : " " + rank.division()) : "UNRANKED";
     }
 
     private OpponentRecord opponent(PlayerRecord player, String nickname) {
@@ -156,8 +235,17 @@ public class TetrisRecordService {
         public int matches;
         public int wins;
         public int losses;
+        public int rating = INITIAL_RATING;
+        public int placementGames;
+        public int lastRankDelta;
+        public boolean lastRankChanged;
+        public String lastRankBefore = "UNRANKED";
+        public String lastRankAfter = "UNRANKED";
+        public String lastRankMatchId = "";
         public Map<String, OpponentRecord> opponents = new LinkedHashMap<>();
     }
+
+    private record Rank(boolean ranked, String tier, String division, int rp) {}
 
     public static class OpponentRecord {
         public String nickname = "";

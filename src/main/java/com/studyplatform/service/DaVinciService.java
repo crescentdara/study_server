@@ -12,6 +12,8 @@ import com.studyplatform.model.davinci.DaVinciGame;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 @Service
@@ -30,6 +32,7 @@ public class DaVinciService {
         DaVinciGame game = (DaVinciGame) room.getGameData();
         int playerIndex  = room.getPlayers().indexOf(player);
         String moveType  = request.getMoveType();
+        game.nextMessageEventId();
 
         if ("DAVINCI_DRAW".equals(moveType)) {
             String error = game.drawTile(playerIndex);
@@ -79,7 +82,7 @@ public class DaVinciService {
                         .status(StudyStatus.FINISHED)
                         .message(names[game.getWinner()] + " 승리!")
                         .currentTurn(game.getCurrentTurn()).winner(game.getWinner())
-                        .gameData(buildGameData(game)).playerNames(names).build();
+                        .gameData(buildPublicGameData(game)).playerNames(names).build();
             }
             return buildState(room, game, message);
 
@@ -88,6 +91,27 @@ public class DaVinciService {
             return error != null
                 ? buildState(room, game, "ERROR: " + error)
                 : buildState(room, game, "");
+
+        } else if ("DAVINCI_FINISHER".equals(moveType)) {
+            if (request.getPayload() == null) return buildState(room, game, "ERROR: Missing payload");
+            Map<String, Object> payload;
+            try {
+                payload = objectMapper.convertValue(
+                        request.getPayload(), new TypeReference<Map<String, Object>>() {});
+            } catch (Exception e) {
+                return buildState(room, game, "ERROR: Invalid payload");
+            }
+            String style = String.valueOf(payload.getOrDefault("style", ""));
+            int tauntId;
+            try {
+                tauntId = Integer.parseInt(String.valueOf(payload.getOrDefault("tauntId", "-1")));
+            } catch (NumberFormatException exception) {
+                tauntId = -1;
+            }
+            String error = game.executeFinisher(playerIndex, style, tauntId);
+            return error != null
+                    ? buildState(room, game, "ERROR: " + error)
+                    : buildState(room, game, "");
 
         } else {
             throw new IllegalArgumentException("Unknown DAVINCI move: " + moveType);
@@ -107,21 +131,69 @@ public class DaVinciService {
                 .roomId(room.getRoomId()).studyType(StudyType.DAVINCI_CODE)
                 .status(room.getStatus()).message(message)
                 .currentTurn(game.getCurrentTurn()).winner(game.getWinner())
-                .gameData(buildGameData(game)).playerNames(names).build();
+                .gameData(buildPublicGameData(game)).playerNames(names).build();
     }
 
-    private Map<String, Object> buildGameData(DaVinciGame g) {
+    public StudyStateResponse buildPlayerState(Room room, Player player) {
+        if (!(room.getGameData() instanceof DaVinciGame game) || player == null) return null;
+        int playerIndex = room.getPlayers().indexOf(player);
+        if (playerIndex < 0) return null;
+        String[] names = room.getPlayers().stream().map(Player::getNickname).toArray(String[]::new);
+        return StudyStateResponse.builder()
+                .roomId(room.getRoomId()).studyType(StudyType.DAVINCI_CODE)
+                .status(room.getStatus()).message("")
+                .currentTurn(game.getCurrentTurn()).winner(game.getWinner())
+                .gameData(buildPlayerGameData(game, playerIndex)).playerNames(names).build();
+    }
+
+    public Map<String, Object> buildPublicGameData(DaVinciGame game) {
+        return buildGameData(game, -1);
+    }
+
+    public Map<String, Object> buildPlayerGameData(DaVinciGame game, int playerIndex) {
+        return buildGameData(game, playerIndex);
+    }
+
+    private Map<String, Object> buildGameData(DaVinciGame g, int viewerIndex) {
         Map<String, Object> data = new HashMap<>();
+        data.put("gameId",                  g.getGameId());
+        data.put("messageEventId",          g.getMessageEventId());
+        data.put("eliminationEventId",      g.getEliminationEventId());
+        data.put("executionEventId",        g.getExecutionEventId());
+        data.put("lastEliminatedPlayer",    g.getLastEliminatedPlayer());
+        data.put("lastEliminatorPlayer",    g.getLastEliminatorPlayer());
+        data.put("finisherPending",         g.isFinisherPending());
+        data.put("executionStyle",          g.getExecutionStyle());
+        data.put("executionTaunt",          g.getExecutionTaunt());
         data.put("numPlayers",              g.getNumPlayers());
         data.put("currentTurn",             g.getCurrentTurn());
         data.put("winner",                  g.getWinner());
         data.put("poolSize",                g.getPool().size());
-        data.put("playerTiles",             g.getPlayerTiles());
+        List<List<Integer>> visibleTiles = new ArrayList<>();
+        for (int playerIndex = 0; playerIndex < g.getPlayerTiles().size(); playerIndex++) {
+            List<Integer> row = new ArrayList<>();
+            for (int tileIndex = 0; tileIndex < g.getPlayerTiles().get(playerIndex).size(); tileIndex++) {
+                int tileId = g.getPlayerTiles().get(playerIndex).get(tileIndex);
+                boolean visible = playerIndex == viewerIndex || g.getRevealed().get(playerIndex).get(tileIndex);
+                row.add(visible ? tileId : hiddenTile(tileId));
+            }
+            visibleTiles.add(row);
+        }
+        data.put("playerTiles",             visibleTiles);
         data.put("revealed",                g.getRevealed());
-        data.put("pendingTileId",           g.getPendingTileId() != null ? g.getPendingTileId() : -1);
-        data.put("drawnTileId",             g.getDrawnTileId()   != null ? g.getDrawnTileId()   : -1);
+        boolean viewerIsCurrent = viewerIndex == g.getCurrentTurn();
+        data.put("pendingTileId",           g.getPendingTileId() == null ? -1
+                : viewerIsCurrent ? g.getPendingTileId() : hiddenTile(g.getPendingTileId()));
+        data.put("drawnTileId",             g.getDrawnTileId() == null ? -1
+                : viewerIsCurrent ? g.getDrawnTileId() : hiddenTile(g.getDrawnTileId()));
         data.put("drawnRevealed",           g.isDrawnRevealed());
         data.put("correctGuessesThisTurn",  g.getCorrectGuessesThisTurn());
         return data;
+    }
+
+    private int hiddenTile(int tileId) {
+        return "black".equals(DaVinciGame.tileColor(tileId))
+                ? DaVinciGame.HIDDEN_BLACK
+                : DaVinciGame.HIDDEN_WHITE;
     }
 }
