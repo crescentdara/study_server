@@ -224,11 +224,6 @@ public class TetrisService {
     }
 
     private int selectTarget(TetrisGame game, int playerIndex, List<Integer> aliveTargets) {
-        int lastAttacker = game.getLastAttackers().getOrDefault(playerIndex, -1);
-        if (aliveTargets.contains(lastAttacker)) {
-            return lastAttacker;
-        }
-
         int cursor = game.getTargetCursors().getOrDefault(playerIndex, 0);
         int target = aliveTargets.get(Math.floorMod(cursor, aliveTargets.size()));
         game.getTargetCursors().put(playerIndex, cursor + 1);

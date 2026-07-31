@@ -91,6 +91,47 @@ class TetrisServiceTest {
     }
 
     @Test
+    void threePlayerAttacksRotateFairlyEvenAfterBeingAttacked() {
+        Room room = playingRoom(3);
+        TetrisGame game = (TetrisGame) room.getGameData();
+
+        service.processMove(room, room.getPlayers().get(0),
+                syncRequest(room, Map.of("attackEvents", List.of(attack("player-0-attack-1", 2, 1)))));
+        service.processMove(room, room.getPlayers().get(2),
+                syncRequest(room, Map.of("attackEvents", List.of(attack("player-2-counter", 2, 1)))));
+        service.processMove(room, room.getPlayers().get(0),
+                syncRequest(room, Map.of("attackEvents", List.of(
+                        attack("player-0-attack-2", 2, 1),
+                        attack("player-0-attack-3", 2, 1)
+                ))));
+
+        assertThat(game.getAttackLog().stream()
+                .filter(entry -> entry.get("from").equals(0))
+                .map(entry -> entry.get("to"))
+                .toList())
+                .containsExactly(1, 2, 1);
+    }
+
+    @Test
+    void roundRobinTargetingSkipsEliminatedPlayers() {
+        Room room = playingRoom(3);
+        TetrisGame game = (TetrisGame) room.getGameData();
+        game.getPlayerStates().get(1).setGameOver(true);
+
+        service.processMove(room, room.getPlayers().get(0),
+                syncRequest(room, Map.of("attackEvents", List.of(
+                        attack("survivor-attack-1", 2, 1),
+                        attack("survivor-attack-2", 2, 1)
+                ))));
+
+        assertThat(game.getAttackLog())
+                .extracting(entry -> entry.get("to"))
+                .containsExactly(2, 2);
+        assertThat(game.getGarbageQueues().get(1)).isEmpty();
+        assertThat(game.getGarbageQueues().get(2)).hasSize(2);
+    }
+
+    @Test
     void lastSurvivingPlayerWins() {
         Room room = playingRoom(3);
 
