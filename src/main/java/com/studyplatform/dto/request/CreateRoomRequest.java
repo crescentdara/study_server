@@ -15,4 +15,5 @@ public class CreateRoomRequest {
     private int maxPlayers = 2;   // 최대 인원 (2~6)
     private int digits = 3;       // 숫자야구 자릿수 (3·4·5)
     private int boardSize = 5;    // 빙고 보드 크기 (3·4·5)
+    private String mode = "";     // 테트리스 전용 — "SURVIVAL"이면 혼자 버티는 판
 }

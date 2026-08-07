@@ -1,0 +1,23 @@
+{
+  "recordedMatchIds" : [ "db35a8cb-31f1-4ab0-98ba-20f58396f443", "a3b2eff7-c8c3-4ece-a26c-256ddb226730", "3d4c453b-4226-45af-b21e-450cc0d94db8", "d1cced78-15f2-4004-87f2-235c8d06b88b", "ff68fa2b-b73f-4f06-9b10-6531a3223a19", "dc6d641b-acb1-45a3-ab05-cc64db102e4e", "ec992f59-72da-4736-bbd5-f3dcf70f5ba5", "116fbff2-282c-449d-bb69-0e5352ab355c", "c1d2605a-38bd-46b4-a5af-8857d709e5b0", "f6b1e2f5-10c2-44e7-8c84-b0e54675df78", "91fe3f04-d8bf-45fd-af7d-75499310ead3", "f41df41f-916a-4cda-9de4-884f24bd34b2", "0b85d469-292a-441c-920c-92c9221b3938", "0bc6be5a-4676-4f3b-b5cd-4c92dec0960b", "e50c400a-ad08-44fd-b375-ce0869f98ff9", "5ba990d1-ab7e-4b07-bfb3-9c17d3ad2499", "5d5ca0cd-515b-45f4-83b4-b92935f06d6b", "0e554df0-b047-4810-8fe9-b6b9488d058b", "df46db34-f1c7-4ca6-b543-5d1160060d61", "96336046-d9ef-4541-b955-68e13be83f16", "885f2c69-5cb7-45bb-b922-b53bbb4bdfe4", "b718364f-243d-4140-a0ab-b7bc16e0f86d", "f1ae6699-c17b-4840-a48b-3123caed0f7e", "d306f37e-251b-4e9d-838a-b818a8d06e09", "66b1aa38-5c39-4009-a20e-ca4dd84ce459" ],
+  "players" : {
+    "거북이" : {
+      "nickname" : "거북이",
+      "best" : 68,
+      "games" : 21,
+      "totalScore" : 131,
+      "lastScore" : 6,
+      "bestAt" : 1786002990732,
+      "lastPlayedAt" : 1786057864262
+    },
+    "123" : {
+      "nickname" : "123",
+      "best" : 65,
+      "games" : 4,
+      "totalScore" : 65,
+      "lastScore" : 0,
+      "bestAt" : 1786056353167,
+      "lastPlayedAt" : 1786056383965
+    }
+  }
+}

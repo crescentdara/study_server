@@ -4,6 +4,8 @@ import com.studyplatform.dto.request.StudyMoveRequest;
 import com.studyplatform.dto.response.ChatMessage;
 import com.studyplatform.dto.response.StudyStateResponse;
 import com.studyplatform.model.*;
+import com.studyplatform.service.AppleBoxRecordService;
+import com.studyplatform.service.AppleBoxService;
 import com.studyplatform.service.BaseballService;
 import com.studyplatform.service.AlkkagiService;
 import com.studyplatform.service.BingoService;
@@ -33,6 +35,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 게임 WebSocket(STOMP) 컨트롤러
@@ -67,6 +70,7 @@ public class StudyController {
     private final RushHourService rushHourService;
     private final UbongoService   ubongoService;
     private final AlkkagiService alkkagiService;
+    private final AppleBoxService appleBoxService;
 
     public StudyController(SimpMessagingTemplate msg, RoomService roomService,
                            ChatHistoryService chatHistoryService,
@@ -77,7 +81,8 @@ public class StudyController {
                            BreakoutService breakoutService, CatchMindService catchMindService,
                            WordChainService wordChainService, RummikubService rummikubService,
                            DaVinciService daVinciService, RushHourService rushHourService,
-                           UbongoService ubongoService, AlkkagiService alkkagiService) {
+                           UbongoService ubongoService, AlkkagiService alkkagiService,
+                           AppleBoxService appleBoxService) {
         this.msg             = msg;
         this.roomService     = roomService;
         this.chatHistoryService = chatHistoryService;
@@ -96,6 +101,7 @@ public class StudyController {
         this.rushHourService  = rushHourService;
         this.ubongoService    = ubongoService;
         this.alkkagiService   = alkkagiService;
+        this.appleBoxService  = appleBoxService;
     }
 
     /** 방 입장 시 현재 상태 동기화 */
@@ -150,6 +156,8 @@ public class StudyController {
             state = ubongoService.buildInitialState(room);
         } else if (room.getStudyType() == StudyType.ALKKAGI) {
             state = alkkagiService.buildInitialState(room);
+        } else if (room.getStudyType() == StudyType.APPLE_BOX) {
+            state = appleBoxService.buildInitialState(room);
         } else {
             state = incidentAvoidService.buildInitialState(room);
         }
@@ -270,6 +278,7 @@ public class StudyController {
                 case RUSH_HOUR   -> rushHourService.processMove(room, player, request);
                 case UBONGO      -> ubongoService.processMove(room, player, request);
                 case ALKKAGI     -> alkkagiService.processMove(room, player, request);
+                case APPLE_BOX   -> appleBoxService.processMove(room, player, request);
             };
             broadcast(roomId, response);
             sendCatchMindSecret(room);
@@ -379,6 +388,7 @@ public class StudyController {
             case RUSH_HOUR   -> rushHourService.buildInitialState(room);
             case UBONGO      -> ubongoService.buildInitialState(room);
             case ALKKAGI     -> alkkagiService.buildInitialState(room);
+            case APPLE_BOX   -> appleBoxService.buildInitialState(room);
         };
     }
 

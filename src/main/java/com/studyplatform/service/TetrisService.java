@@ -8,10 +8,13 @@ import com.studyplatform.model.StudyStatus;
 import com.studyplatform.model.StudyType;
 import com.studyplatform.model.tetris.TetrisGame;
 import com.studyplatform.model.tetris.TetrisPlayerState;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -21,10 +24,25 @@ public class TetrisService {
     private static final int MAX_ATTACK_LOG = 20;
     private static final int MAX_DISTRACT_EVENTS = 40;
     private static final int MAX_ATTACK_EVENTS_PER_SYNC = 64;
-    private final TetrisRecordService recordService;
 
-    public TetrisService(TetrisRecordService recordService) {
+    /* ── 서바이벌 합산 점수 ─────────────────────────────────────────────────
+     * 순위는 합산 점수로 매기지만 생존 시간이 사실상 결정하도록 비중을 크게 둔다.
+     * 1초 = 100점이므로, 10초를 더 버틴 사람을 앞지르려면 게임 점수 10,000점
+     * 또는 50줄을 더 지워야 한다. 즉 점수·줄은 비슷한 기록끼리의 동률을 가른다.
+     * ─────────────────────────────────────────────────────────────────── */
+    private static final int SURVIVAL_TIME_WEIGHT = 100;
+    private static final int SURVIVAL_LINE_WEIGHT = 20;
+    private static final int SURVIVAL_SCORE_DIVISOR = 10;
+
+    private final TetrisRecordService recordService;
+    private final TetrisRecordService survivalRecordService;
+
+    public TetrisService(
+            TetrisRecordService recordService,
+            @Qualifier("tetrisSurvivalRecordService") TetrisRecordService survivalRecordService
+    ) {
         this.recordService = recordService;
+        this.survivalRecordService = survivalRecordService;
     }
 
     public StudyStateResponse processMove(Room room, Player player, StudyMoveRequest request) {
@@ -40,15 +58,21 @@ public class TetrisService {
             if (player.getPlayerIndex() != 0) {
                 throw new IllegalArgumentException("Only the host can pause TETRIS.");
             }
-            game.setPaused(readPaused(request.getPayload(), !game.isPaused()));
+            // 멈춘 시간은 서바이벌 시계에서 빼야 하므로 applyPause로 누적한다
+            game.applyPause(readPaused(request.getPayload(), !game.isPaused()));
             return buildInitialState(room);
         }
         if ("TETRIS_DISTRACT".equals(request.getMoveType())) {
             distract(game, player.getPlayerIndex(), request.getPayload());
             return buildInitialState(room);
         }
-        syncState(game, player.getPlayerIndex(), request.getPayload());
-        updateWinner(room, game, player.getPlayerIndex());
+        boolean survival = RoomService.isSurvival(room);
+        syncState(game, player.getPlayerIndex(), request.getPayload(), survival);
+        if (survival) {
+            settleSurvival(room, game);
+        } else {
+            updateWinner(room, game, player.getPlayerIndex());
+        }
         return buildInitialState(room);
     }
 
@@ -58,12 +82,15 @@ public class TetrisService {
             game = new TetrisGame(room.getPlayers().size());
             room.setGameData(game);
         }
+        boolean survival = RoomService.isSurvival(room);
         Map<String, Object> gameData = new HashMap<>();
-        gameData.put("mode", "local");
+        // survival이면 클라이언트가 '시간이 되면 쓰레기 줄이 올라오는' 규칙으로 돌린다
+        gameData.put("mode", survival ? "survival" : "local");
         gameData.put("rows", game.getRows());
         gameData.put("cols", game.getCols());
         gameData.put("numPlayers", game.getNumPlayers());
-        gameData.put("rankedMatch", game.getNumPlayers() >= 2);
+        // 서바이벌은 기록을 남기지 않으므로 랭크전이 아니다
+        gameData.put("rankedMatch", !survival && game.getNumPlayers() >= 2);
         gameData.put("instanceId", game.getInstanceId());
         gameData.put("playerStates", game.getPlayerStates());
         gameData.put("garbageQueues", game.getGarbageQueues());
@@ -76,9 +103,15 @@ public class TetrisService {
         gameData.put("abortReason", game.getAbortReason());
         gameData.put("previousAbortReason", game.getPreviousAbortReason());
         gameData.put("finalRanking", game.getFinalRanking());
+        if (survival) {
+            // 모두가 같은 시각·같은 구멍 순서를 쓰도록 서버 값을 그대로 내려보낸다
+            gameData.put("survivalElapsedMs", game.survivalElapsedMs());
+            gameData.put("garbageHoles", game.getGarbageHoles());
+            gameData.put("survivalResults", game.getSurvivalResults());
+        }
 
         String[] names = room.getPlayers().stream().map(Player::getNickname).toArray(String[]::new);
-        gameData.put("records", recordService.recordsFor(List.of(names)));
+        gameData.put("records", (survival ? survivalRecordService : recordService).recordsFor(List.of(names)));
         return StudyStateResponse.builder()
                 .roomId(room.getRoomId())
                 .studyType(StudyType.TETRIS)
@@ -96,7 +129,7 @@ public class TetrisService {
     }
 
     @SuppressWarnings("unchecked")
-    private void syncState(TetrisGame game, int playerIndex, Object payload) {
+    private void syncState(TetrisGame game, int playerIndex, Object payload, boolean survival) {
         if (!(payload instanceof Map<?, ?> map)) return;
         Object requestedInstance = map.get("instanceId");
         if (requestedInstance instanceof String instanceId
@@ -126,8 +159,92 @@ public class TetrisService {
         state.setGameOver(requestedGameOver);
         state.setUpdatedAt(System.currentTimeMillis());
 
+        if (survival) {
+            // 순수 생존 경쟁 — 서로 공격하지 않는다. 쓰레기는 시간이 되면 모두에게 올라온다.
+            stampSurvivalResult(game, playerIndex, state);
+            return;
+        }
         ackAttacks(game, playerIndex, map);
         handleAttacks(game, playerIndex, map);
+    }
+
+    /**
+     * 탈락한 순간의 기록을 서버가 찍는다.
+     *
+     * 생존 시간을 클라이언트가 보고하는 값이 아니라 '서버가 탈락을 확인한 시점'으로
+     * 계산하므로 시간을 부풀릴 수 없다. 한 번 찍힌 결과는 덮어쓰지 않는다.
+     */
+    private void stampSurvivalResult(TetrisGame game, int playerIndex, TetrisPlayerState state) {
+        if (!state.isGameOver() || game.getSurvivalResults().containsKey(playerIndex)) return;
+        game.getSurvivalResults().put(playerIndex, survivalResult(game.survivalElapsedMs(), state));
+    }
+
+    private Map<String, Object> survivalResult(long survivedMs, TetrisPlayerState state) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        long seconds = survivedMs / 1000;
+        long total = seconds * SURVIVAL_TIME_WEIGHT
+                + (long) state.getLines() * SURVIVAL_LINE_WEIGHT
+                + state.getScore() / SURVIVAL_SCORE_DIVISOR;
+        result.put("survivedMs", survivedMs);
+        result.put("survivedSeconds", seconds);
+        result.put("score", state.getScore());
+        result.put("lines", state.getLines());
+        result.put("total", total);
+        return result;
+    }
+
+    /**
+     * 서바이벌 종료 판정.
+     *
+     * 마지막 한 명이 남으면 그 시점의 기록을 찍고 끝낸다. 순위는 합산 점수 내림차순이며
+     * 생존 시간 비중이 커서 사실상 오래 버틴 사람이 앞선다.
+     */
+    private void settleSurvival(Room room, TetrisGame game) {
+        if (room.getStatus() == StudyStatus.FINISHED || game.isAborted()) return;
+
+        List<Integer> alive = game.getPlayerStates().entrySet().stream()
+                .filter(entry -> !entry.getValue().isGameOver())
+                .map(Map.Entry::getKey)
+                .sorted()
+                .toList();
+        if (alive.size() > 1) return;
+
+        // 최후 생존자도 그 순간까지의 기록을 남긴다
+        for (int index : alive) {
+            TetrisPlayerState state = game.getPlayerStates().get(index);
+            if (state != null && !game.getSurvivalResults().containsKey(index)) {
+                game.getSurvivalResults().put(index, survivalResult(game.survivalElapsedMs(), state));
+            }
+        }
+
+        List<Integer> ranking = game.getSurvivalResults().entrySet().stream()
+                .sorted(Comparator
+                        .comparingLong((Map.Entry<Integer, Map<String, Object>> entry) ->
+                                -((Number) entry.getValue().get("total")).longValue())
+                        .thenComparingInt(Map.Entry::getKey))
+                .map(Map.Entry::getKey)
+                .toList();
+
+        game.getFinalRanking().clear();
+        game.getFinalRanking().addAll(ranking);
+        game.setWinner(ranking.isEmpty() ? -1 : ranking.get(0));
+        room.setStatus(StudyStatus.FINISHED);
+        saveSurvivalRecord(room, game);
+    }
+
+    /** 서바이벌 랭크는 대전과 완전히 별개 장부에 쌓인다. 혼자 한 판은 기록하지 않는다. */
+    private void saveSurvivalRecord(Room room, TetrisGame game) {
+        if (game.isRecordSaved() || game.isAborted() || game.getFinalRanking().size() < 2) return;
+        List<String> ranking = game.getFinalRanking().stream()
+                .map(index -> room.getPlayers().stream()
+                        .filter(player -> player.getPlayerIndex() == index)
+                        .findFirst()
+                        .map(Player::getNickname)
+                        .orElse(""))
+                .toList();
+        if (ranking.stream().anyMatch(String::isBlank)) return;
+        survivalRecordService.recordCompletedMatch(game.getInstanceId(), ranking);
+        game.setRecordSaved(true);
     }
 
     private List<List<String>> validatedBoard(Object value, int expectedRows, int expectedCols) {

@@ -70,7 +70,8 @@ public class RoomController {
                 request.getSessionId(),
                 request.getMaxPlayers(),
                 request.getDigits(),
-                request.getBoardSize()
+                request.getBoardSize(),
+                request.getMode()
         );
         return ResponseEntity.ok(RoomResponse.from(room));
     }

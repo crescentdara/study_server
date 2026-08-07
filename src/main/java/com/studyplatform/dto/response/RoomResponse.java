@@ -21,6 +21,8 @@ public class RoomResponse {
     private List<String> playerNames;
     private int digits;
     private int boardSize;
+    /** 테트리스 서바이벌이면 "SURVIVAL" */
+    private String mode;
 
     public static RoomResponse from(Room room) {
         RoomResponse dto = new RoomResponse();
@@ -34,6 +36,7 @@ public class RoomResponse {
         dto.setPlayerNames(room.getPlayers().stream().map(p -> p.getNickname()).toList());
         dto.setDigits(room.getDigits());
         dto.setBoardSize(room.getBoardSize());
+        dto.setMode(room.getMode() == null ? "" : room.getMode());
         return dto;
     }
 }

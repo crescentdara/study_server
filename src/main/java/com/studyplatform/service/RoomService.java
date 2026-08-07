@@ -46,18 +46,23 @@ public class RoomService {
     /** 방 생성: 방장(playerIndex=0) 등록, 게임 데이터는 아직 초기화하지 않음 */
     public Room createRoom(String roomName, StudyType studyType,
                            String nickname, String sessionId,
-                           int maxPlayers, int digits, int boardSize) {
+                           int maxPlayers, int digits, int boardSize, String mode) {
         String safeRoomName = roomName == null || roomName.trim().isEmpty()
                 ? studyType.name() + "-" + java.util.UUID.randomUUID().toString().substring(0, 4)
                 : roomName.trim();
         Room room = new Room(safeRoomName, studyType);
+        // 서바이벌도 여러 명이 같은 조건에서 누가 오래 버티나 겨룰 수 있다 (1~3명)
+        boolean survival = studyType == StudyType.TETRIS && "SURVIVAL".equalsIgnoreCase(mode == null ? "" : mode.trim());
+        room.setMode(survival ? "SURVIVAL" : "");
         // TETRIS=최대 3명(2명부터 시작), INCIDENT_AVOID/BREAKOUT=3명 고정, OMOK=2명 고정, RUSH_HOUR=1~3명, OLDMAID=2~7명, 나머지=2~6명
-        room.setMaxPlayers(studyType == StudyType.TETRIS ? 3
+        room.setMaxPlayers(survival ? Math.max(1, Math.min(3, maxPlayers))
+                : studyType == StudyType.TETRIS ? 3
                 : studyType == StudyType.INCIDENT_AVOID || studyType == StudyType.BREAKOUT ? 3
                 : studyType == StudyType.OMOK      ? 2
                 : studyType == StudyType.ALKKAGI   ? Math.max(1, Math.min(3, maxPlayers))
                 : studyType == StudyType.RUSH_HOUR ? Math.max(1, Math.min(3, maxPlayers))
                 : studyType == StudyType.UBONGO    ? Math.max(1, Math.min(3, maxPlayers))
+                : studyType == StudyType.APPLE_BOX ? Math.max(1, Math.min(3, maxPlayers))
                 : studyType == StudyType.OLDMAID   ? Math.max(2, Math.min(7, maxPlayers))
                 : studyType == StudyType.WORD_CHAIN ? Math.max(2, Math.min(6, maxPlayers))
                 : Math.max(2, Math.min(6, maxPlayers)));
@@ -103,7 +108,7 @@ public class RoomService {
      * @throws RuntimeException 게임별 최소 인원을 충족하지 못했거나 이미 시작된 경우
      */
     public void startGame(Room room) {
-        if (room.getStudyType() != StudyType.TETRIS && room.getStudyType() != StudyType.INCIDENT_AVOID && room.getStudyType() != StudyType.BREAKOUT && room.getStudyType() != StudyType.RUSH_HOUR && room.getStudyType() != StudyType.UBONGO && room.getStudyType() != StudyType.ALKKAGI && room.getPlayers().size() < 2)
+        if (room.getStudyType() != StudyType.TETRIS && room.getStudyType() != StudyType.INCIDENT_AVOID && room.getStudyType() != StudyType.BREAKOUT && room.getStudyType() != StudyType.RUSH_HOUR && room.getStudyType() != StudyType.UBONGO && room.getStudyType() != StudyType.ALKKAGI && room.getStudyType() != StudyType.APPLE_BOX && room.getPlayers().size() < 2)
             throw new RuntimeException("Need at least 2 players to start.");
         if (room.getStatus() != StudyStatus.WAITING)
             throw new RuntimeException("Game already started.");
@@ -120,7 +125,8 @@ public class RoomService {
                           || room.getStudyType() == StudyType.RUMMIKUB
                           || room.getStudyType() == StudyType.DAVINCI_CODE
                           || room.getStudyType() == StudyType.UBONGO
-                          || room.getStudyType() == StudyType.ALKKAGI;
+                          || room.getStudyType() == StudyType.ALKKAGI
+                          || room.getStudyType() == StudyType.APPLE_BOX;
         room.setStatus(directPlay ? StudyStatus.PLAYING : StudyStatus.SETUP);
     }
 
@@ -160,7 +166,8 @@ public class RoomService {
                           || room.getStudyType() == StudyType.RUMMIKUB
                           || room.getStudyType() == StudyType.RUSH_HOUR
                           || room.getStudyType() == StudyType.UBONGO
-                          || room.getStudyType() == StudyType.ALKKAGI;
+                          || room.getStudyType() == StudyType.ALKKAGI
+                          || room.getStudyType() == StudyType.APPLE_BOX;
         room.setStatus(directPlay ? StudyStatus.PLAYING : StudyStatus.SETUP);
     }
 
@@ -182,11 +189,16 @@ public class RoomService {
             case RUSH_HOUR   -> room.setGameData(new com.studyplatform.model.rushhour.RushHourGame(n));
             case UBONGO      -> room.setGameData(new com.studyplatform.model.ubongo.UbongoGame(n));
             case ALKKAGI     -> room.setGameData(new com.studyplatform.model.alkkagi.AlkkagiGame(n));
+            case APPLE_BOX   -> room.setGameData(new com.studyplatform.model.applebox.AppleBoxGame(n));
         }
     }
 
     private void normalizeRoomConfig(Room room) {
-        if (room.getStudyType() == StudyType.TETRIS) {
+        if (room.getStudyType() == StudyType.TETRIS && isSurvival(room)) {
+            // 서바이벌은 방을 만들 때 고른 정원(1~3)을 그대로 지킨다
+            room.setMaxPlayers(Math.max(1, Math.min(3, room.getMaxPlayers())));
+            room.setBoardSize(20);
+        } else if (room.getStudyType() == StudyType.TETRIS) {
             room.setMaxPlayers(3);
             room.setBoardSize(20);
         } else if (room.getStudyType() == StudyType.INCIDENT_AVOID || room.getStudyType() == StudyType.BREAKOUT) {
@@ -199,6 +211,13 @@ public class RoomService {
             room.setMaxPlayers(Math.max(1, Math.min(3, room.getMaxPlayers())));
             room.setBoardSize(0);
         }
+    }
+
+    /** 테트리스 서바이벌 방인지 */
+    public static boolean isSurvival(Room room) {
+        return room != null
+                && room.getStudyType() == StudyType.TETRIS
+                && "SURVIVAL".equalsIgnoreCase(room.getMode() == null ? "" : room.getMode().trim());
     }
 
     /**

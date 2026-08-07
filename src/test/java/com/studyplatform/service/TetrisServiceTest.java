@@ -23,6 +23,7 @@ class TetrisServiceTest {
     Path tempDir;
     private TetrisService service;
     private TetrisRecordService recordService;
+    private TetrisRecordService survivalRecordService;
 
     @BeforeEach
     void setUp() {
@@ -30,7 +31,12 @@ class TetrisServiceTest {
                 new ObjectMapper(),
                 tempDir.resolve("tetris-records.json")
         );
-        service = new TetrisService(recordService);
+        // 서바이벌 랭크는 대전과 다른 파일에 쌓인다
+        survivalRecordService = new TetrisRecordService(
+                new ObjectMapper(),
+                tempDir.resolve("tetris-survival-records.json")
+        );
+        service = new TetrisService(recordService, survivalRecordService);
     }
 
     @Test
@@ -282,6 +288,103 @@ class TetrisServiceTest {
         );
 
         assertThat(((TetrisGame) room.getGameData()).isPaused()).isTrue();
+    }
+
+    /** 서바이벌 방은 mode=survival로 내려가고 랭크전이 아니다 — 클라이언트가 이 값으로 규칙을 바꾼다. */
+    @Test
+    void survivalRoomIsSentAsSurvivalModeAndNotRanked() {
+        Room survival = playingRoom(1);
+        survival.setMode("SURVIVAL");
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> gameData = (Map<String, Object>) service.buildInitialState(survival).getGameData();
+
+        assertThat(gameData).containsEntry("mode", "survival").containsEntry("rankedMatch", false);
+    }
+
+    @Test
+    void versusRoomKeepsLocalModeAndRanking() {
+        @SuppressWarnings("unchecked")
+        Map<String, Object> gameData = (Map<String, Object>) service.buildInitialState(playingRoom(2)).getGameData();
+
+        assertThat(gameData).containsEntry("mode", "local").containsEntry("rankedMatch", true);
+    }
+
+    /**
+     * 서바이벌은 순수 생존 경쟁이다 — 라인을 지워도 상대에게 공격이 가지 않는다.
+     */
+    @Test
+    void survivalDoesNotSendAttacksBetweenPlayers() {
+        Room room = survivalRoom(2);
+        TetrisGame game = (TetrisGame) room.getGameData();
+
+        service.processMove(room, room.getPlayers().get(0), syncRequest(room, Map.of(
+                "attackEvents", List.of(attack("attack-1", 4, 4))
+        )));
+
+        assertThat(game.getGarbageQueues().get(1)).isEmpty();
+        assertThat(game.getAttackLog()).isEmpty();
+    }
+
+    /**
+     * 순위는 합산 점수로 매기고, 그 점수는 서버가 찍는다.
+     *
+     * 생존 시간 비중(초당 100점)이 커서 실제 경기에서는 오래 버틴 쪽이 앞서고,
+     * 비슷한 기록끼리는 처리한 줄과 점수가 순서를 가른다.
+     */
+    @Test
+    void survivalRanksByServerStampedCompositeScore() {
+        Room room = survivalRoom(2);
+        TetrisGame game = (TetrisGame) room.getGameData();
+        game.getPlayerStates().get(0).setScore(5_000);
+        game.getPlayerStates().get(0).setLines(20);
+        game.getPlayerStates().get(1).setScore(1_000);
+        game.getPlayerStates().get(1).setLines(5);
+
+        // 먼저 1번이 탈락하고, 이어서 0번도 탈락한다
+        service.processMove(room, room.getPlayers().get(1), syncRequest(room, Map.of("gameOver", true)));
+        service.processMove(room, room.getPlayers().get(0), syncRequest(room, Map.of("gameOver", true)));
+
+        assertThat(room.getStatus()).isEqualTo(StudyStatus.FINISHED);
+        // 0번: 20줄×20 + 5000/10 = 900, 1번: 5×20 + 1000/10 = 200
+        assertThat(game.getSurvivalResults().get(0)).containsEntry("total", 900L);
+        assertThat(game.getSurvivalResults().get(1)).containsEntry("total", 200L);
+        assertThat(game.getFinalRanking()).containsExactly(0, 1);
+        assertThat(game.getWinner()).isEqualTo(0);
+    }
+
+    /** 서바이벌 결과는 서바이벌 장부에만 쌓이고 대전 전적은 건드리지 않는다. */
+    @Test
+    void survivalRecordGoesOnlyToTheSurvivalLadder() {
+        Room room = survivalRoom(2);
+
+        service.processMove(room, room.getPlayers().get(1), syncRequest(room, Map.of("gameOver", true)));
+        service.processMove(room, room.getPlayers().get(0), syncRequest(room, Map.of("gameOver", true)));
+
+        assertThat(survivalRecordService.leaderboard(10)).hasSize(2);
+        assertThat(recordService.leaderboard(10)).isEmpty();
+    }
+
+    /** 혼자 한 서바이벌은 순위가 없으므로 랭크에 남지 않는다. */
+    @Test
+    void soloSurvivalIsNotRecorded() {
+        Room room = survivalRoom(1);
+
+        service.processMove(room, room.getPlayers().get(0), syncRequest(room, Map.of("gameOver", true)));
+
+        assertThat(room.getStatus()).isEqualTo(StudyStatus.FINISHED);
+        assertThat(survivalRecordService.leaderboard(10)).isEmpty();
+        assertThat(recordService.leaderboard(10)).isEmpty();
+    }
+
+    private Room survivalRoom(int playerCount) {
+        Room room = playingRoom(playerCount);
+        room.setMode("SURVIVAL");
+        // 탈락 보고가 무시되지 않도록 정상 상태를 한 번 보내 준다
+        for (int index = 0; index < playerCount; index += 1) {
+            service.processMove(room, room.getPlayers().get(index), syncRequest(room, Map.of("gameOver", false)));
+        }
+        return room;
     }
 
     private Room playingRoom(int playerCount) {

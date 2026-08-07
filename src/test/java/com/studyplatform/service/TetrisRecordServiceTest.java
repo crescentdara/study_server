@@ -149,6 +149,56 @@ class TetrisRecordServiceTest {
         assertThat((Integer) multiplayer.recordsFor(List.of("C")).get("C").get("lastRankDelta")).isNegative();
     }
 
+    /** 로비 목록은 배치를 마친 사람이 먼저, 같은 그룹에서는 레이팅 순으로 나온다. */
+    @Test
+    void leaderboardPutsRankedPlayersFirstAndOrdersByRating() {
+        TetrisRecordService service = new TetrisRecordService(
+                new ObjectMapper(),
+                tempDir.resolve("leaderboard-records.json")
+        );
+
+        // A는 5판을 이겨 배치를 끝내고, C·D는 한 판만 해서 배치 중이다
+        for (int match = 1; match <= 5; match += 1) {
+            service.recordCompletedMatch("placement-" + match, List.of("A", "B"));
+        }
+        service.recordCompletedMatch("rookies", List.of("C", "D"));
+
+        List<Map<String, Object>> board = service.leaderboard(10);
+
+        assertThat(board).hasSize(4);
+        assertThat(board.get(0))
+                .containsEntry("nickname", "A")
+                .containsEntry("rank", 1)
+                .containsEntry("ranked", true)
+                .containsEntry("wins", 5)
+                .containsEntry("losses", 0)
+                .containsEntry("winRate", 100L)
+                .containsEntry("tier", "SILVER");
+        assertThat(board.get(1))
+                .containsEntry("nickname", "B")
+                .containsEntry("rank", 2)
+                .containsEntry("ranked", true);
+        // 배치 중인 사람은 레이팅과 무관하게 뒤로 간다
+        assertThat(board.get(2)).containsEntry("ranked", false).containsEntry("placementGames", 1);
+        assertThat(board.get(3)).containsEntry("ranked", false);
+        // 상대전적은 목록에서 덜어낸다
+        assertThat(board.get(0)).doesNotContainKey("opponents");
+    }
+
+    @Test
+    void leaderboardHonoursLimitAndSkipsPlayersWithoutMatches() {
+        TetrisRecordService service = new TetrisRecordService(
+                new ObjectMapper(),
+                tempDir.resolve("leaderboard-limit-records.json")
+        );
+        service.recordCompletedMatch("m1", List.of("A", "B", "C"));
+
+        assertThat(service.leaderboard(2)).hasSize(2);
+        // 이름만 조회한 적 있는 사람은 목록에 오르지 않는다
+        service.recordsFor(List.of("구경꾼"));
+        assertThat(service.leaderboard(10)).hasSize(3);
+    }
+
     @Test
     void challengerIsTheTopRankAboveGrandmaster() throws Exception {
         Path recordPath = tempDir.resolve("challenger-records.json");

@@ -3,6 +3,7 @@ package com.studyplatform.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -10,7 +11,9 @@ import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -18,7 +21,12 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * 서바이벌 랭크도 같은 계산을 쓰지만 장부는 따로 둔다(TetrisRecordConfig에서 두 번째
+ * 빈을 만든다). 그래서 이름 없이 주입하면 대전 장부가 오도록 @Primary를 붙인다.
+ */
 @Service
+@Primary
 public class TetrisRecordService {
     private static final int PLACEMENT_MATCHES = 5;
     private static final int INITIAL_RATING = 800;
@@ -42,7 +50,7 @@ public class TetrisRecordService {
         this(objectMapper, Path.of(recordPath));
     }
 
-    TetrisRecordService(ObjectMapper objectMapper, Path recordPath) {
+    public TetrisRecordService(ObjectMapper objectMapper, Path recordPath) {
         this.objectMapper = objectMapper;
         this.recordPath = recordPath.toAbsolutePath().normalize();
         this.store = load();
@@ -83,6 +91,37 @@ public class TetrisRecordService {
         store.completedMatchIds.add(matchId);
         persist();
         return true;
+    }
+
+    /**
+     * 티어·레이팅 순위 목록 — 로비에서 방에 들어가지 않고도 보여주기 위한 조회. rank는 1부터.
+     *
+     * 배치를 마친 사람이 먼저 오고 그 다음이 배치 중인 사람이다(같은 그룹 안에서는 레이팅 순).
+     * 상대전적(opponents)은 목록에 필요하지 않으므로 덜어낸다.
+     */
+    public synchronized List<Map<String, Object>> leaderboard(int limit) {
+        int size = limit <= 0 ? 20 : Math.min(100, limit);
+        List<PlayerRecord> sorted = store.players.values().stream()
+                .filter(record -> record.matches > 0)
+                .sorted(Comparator
+                        .comparingInt((PlayerRecord record) -> record.placementGames >= PLACEMENT_MATCHES ? 0 : 1)
+                        .thenComparingInt(record -> -record.rating)
+                        .thenComparingInt(record -> -record.wins)
+                        .thenComparing(record -> record.nickname, String.CASE_INSENSITIVE_ORDER))
+                .toList();
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (int index = 0; index < sorted.size() && index < size; index += 1) {
+            PlayerRecord record = sorted.get(index);
+            Map<String, Object> row = new LinkedHashMap<>(toPublicRecord(record));
+            row.remove("opponents");
+            row.put("nickname", record.nickname);
+            row.put("rank", index + 1);
+            row.put("rating", record.rating);
+            row.put("winRate", record.matches == 0 ? 0 : Math.round(record.wins * 100.0 / record.matches));
+            result.add(row);
+        }
+        return result;
     }
 
     public synchronized Map<String, Map<String, Object>> recordsFor(Collection<String> nicknames) {

@@ -21,6 +21,11 @@ public class Room {
     private int maxPlayers = 2;  // 최대 인원 (2~6명)
     private int digits = 3;      // 숫자야구 자릿수
     private int boardSize = 5;   // 빙고 보드 크기
+    /**
+     * 게임 모드. 지금은 테트리스만 쓴다 — "SURVIVAL"이면 혼자서 밀려 올라오는
+     * 쓰레기 줄을 버티는 판이고, 비어 있으면 평소의 대전이다.
+     */
+    private String mode = "";
 
     public Room(String roomName, StudyType studyType) {
         this.roomId = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
