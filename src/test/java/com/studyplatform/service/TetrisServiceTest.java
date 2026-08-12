@@ -353,6 +353,33 @@ class TetrisServiceTest {
         assertThat(game.getWinner()).isEqualTo(0);
     }
 
+    /**
+     * 한 명이 먼저 탈락해도 경기는 계속된다.
+     *
+     * 남은 사람의 생존 시간이 계속 쌓여야 오래 버틴 보상이 생기고, 먼저 죽은 사람이
+     * 점수만으로 역전하지 못한다.
+     */
+    @Test
+    void survivalKeepsGoingUntilEveryoneIsOut() {
+        Room room = survivalRoom(2);
+        TetrisGame game = (TetrisGame) room.getGameData();
+
+        service.processMove(room, room.getPlayers().get(1), syncRequest(room, Map.of("gameOver", true)));
+
+        // 아직 한 명이 살아 있으므로 순위도, 종료도 없다
+        assertThat(room.getStatus()).isEqualTo(StudyStatus.PLAYING);
+        assertThat(game.getFinalRanking()).isEmpty();
+        assertThat(game.getWinner()).isEqualTo(-1);
+        // 먼저 죽은 사람의 기록만 찍혀 있다
+        assertThat(game.getSurvivalResults()).containsKey(1).doesNotContainKey(0);
+        assertThat(survivalRecordService.leaderboard(10)).isEmpty();
+
+        service.processMove(room, room.getPlayers().get(0), syncRequest(room, Map.of("gameOver", true)));
+
+        assertThat(room.getStatus()).isEqualTo(StudyStatus.FINISHED);
+        assertThat(game.getFinalRanking()).hasSize(2);
+    }
+
     /** 서바이벌 결과는 서바이벌 장부에만 쌓이고 대전 전적은 건드리지 않는다. */
     @Test
     void survivalRecordGoesOnlyToTheSurvivalLadder() {

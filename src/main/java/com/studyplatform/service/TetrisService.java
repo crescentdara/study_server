@@ -196,26 +196,26 @@ public class TetrisService {
     /**
      * 서바이벌 종료 판정.
      *
-     * 마지막 한 명이 남으면 그 시점의 기록을 찍고 끝낸다. 순위는 합산 점수 내림차순이며
-     * 생존 시간 비중이 커서 사실상 오래 버틴 사람이 앞선다.
+     * 한 명이 먼저 탈락해도 경기는 끝나지 않는다 — 남은 사람은 자기가 죽을 때까지
+     * 계속 버티고, 그 시간이 그대로 자기 기록이 된다. 한 명 남는 순간 끝내면 생존자의
+     * 시계도 함께 멈춰서 오래 버틴 보상이 사라지고, 먼저 죽은 사람이 점수로 역전한다.
+     *
+     * 순위는 합산 점수 내림차순이며 생존 시간 비중이 커서 오래 버틴 사람이 앞선다.
      */
     private void settleSurvival(Room room, TetrisGame game) {
         if (room.getStatus() == StudyStatus.FINISHED || game.isAborted()) return;
+        if (game.getPlayerStates().isEmpty()) return;
 
-        List<Integer> alive = game.getPlayerStates().entrySet().stream()
-                .filter(entry -> !entry.getValue().isGameOver())
-                .map(Map.Entry::getKey)
-                .sorted()
-                .toList();
-        if (alive.size() > 1) return;
+        boolean everyoneOut = game.getPlayerStates().values().stream()
+                .allMatch(TetrisPlayerState::isGameOver);
+        if (!everyoneOut) return;
 
-        // 최후 생존자도 그 순간까지의 기록을 남긴다
-        for (int index : alive) {
-            TetrisPlayerState state = game.getPlayerStates().get(index);
-            if (state != null && !game.getSurvivalResults().containsKey(index)) {
+        // 탈락 보고가 스탬프 없이 들어온 경우를 대비한 보정
+        game.getPlayerStates().forEach((index, state) -> {
+            if (!game.getSurvivalResults().containsKey(index)) {
                 game.getSurvivalResults().put(index, survivalResult(game.survivalElapsedMs(), state));
             }
-        }
+        });
 
         List<Integer> ranking = game.getSurvivalResults().entrySet().stream()
                 .sorted(Comparator

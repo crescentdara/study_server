@@ -116,6 +116,49 @@ class AppleBoxRecordServiceTest {
         assertThat(service.leaderboard(10)).isEmpty();
     }
 
+    /**
+     * 예전 규칙으로 쌓인 기존 파일 위에 이어서 누적된다.
+     *
+     * 예전에는 0점으로 끝난 판도 판수에 넣었기 때문에 기존 값에는 그 판들이 섞여 있다.
+     * 판별 기록이 남아 있지 않아 소급해서 걷어낼 수는 없으므로, 기존 값은 그대로 두고
+     * 새 판만 새 규칙(점수 > 0)으로 더한다.
+     */
+    @Test
+    void newRoundsAccumulateOnTopOfExistingRecords() throws Exception {
+        Path recordPath = tempDir.resolve("legacy-records.json");
+        RecordStore stored = new RecordStore();
+        AppleBoxRecordService.PlayerRecord legacy = new AppleBoxRecordService.PlayerRecord();
+        legacy.nickname = "거북이";
+        legacy.best = 68;
+        legacy.games = 21;
+        legacy.totalScore = 131;
+        legacy.lastScore = 6;
+        legacy.bestAt = 1_786_002_990_732L;
+        legacy.lastPlayedAt = 1_786_057_864_262L;
+        stored.players.put("거북이", legacy);
+        new ObjectMapper().writeValue(recordPath.toFile(), stored);
+
+        AppleBoxRecordService service = new AppleBoxRecordService(new ObjectMapper(), recordPath);
+
+        // 0점 판은 기존 값을 건드리지 않는다
+        assertThat(service.recordScores("zero-round", scores("거북이", 0))).isFalse();
+        assertThat(service.recordsFor(List.of("거북이")).get("거북이"))
+                .containsEntry("games", 21)
+                .containsEntry("best", 68);
+
+        // 점수를 낸 판은 기존 판수 위에 더해지고, 최고점도 갱신된다
+        assertThat(service.recordScores("played-round", scores("거북이", 80))).isTrue();
+        assertThat(service.recordsFor(List.of("거북이")).get("거북이"))
+                .containsEntry("games", 22)
+                .containsEntry("best", 80)
+                .containsEntry("lastScore", 80);
+
+        // 주간 장부는 예전 파일에 없던 것이라 이번 판부터 센다
+        assertThat(service.weeklyLeaderboard(10))
+                .singleElement()
+                .satisfies(record -> assertThat(record).containsEntry("games", 1));
+    }
+
     /** 주간 랭킹은 누적과 별개로 쌓인다. */
     @Test
     void weeklyRankingIsKeptSeparatelyFromTheAllTimeRanking() {

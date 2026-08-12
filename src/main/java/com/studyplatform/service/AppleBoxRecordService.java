@@ -74,6 +74,14 @@ public class AppleBoxRecordService {
             String name = displayName(entry.getKey());
             if (name.isBlank()) continue;
             int score = Math.max(0, entry.getValue() == null ? 0 : entry.getValue());
+            /*
+             * 한 칸도 정리하지 못한 판은 세지 않는다.
+             *
+             * 보드만 확인하고 새로 시작하는 경우가 많은데, 그걸 판수에 넣으면 판수와
+             * 평균이 부풀려지고 0점이 랭킹에 올라온다. 그래서 '한 번이라도 정리에
+             * 성공한 판'만 한 판으로 인정한다.
+             */
+            if (score <= 0) continue;
             // 누적과 주간은 같은 점수를 각자의 장부에 따로 적는다
             applyScore(store.players, name, score, now);
             applyScore(store.weeklyPlayers, name, score, now);

@@ -54,6 +54,41 @@ class TetrisMatchLifecycleTest {
                 .hasMessage("Room is full.");
     }
 
+    /**
+     * 일시정지 동안에는 서바이벌 시계가 멈춰야 한다.
+     *
+     * 멈춘 사이에도 초가 흐르면 재개하는 순간 쓰레기 줄이 몰려 올라오고, 합산 점수의
+     * 생존 시간도 부풀려진다.
+     */
+    @Test
+    void survivalClockStopsWhilePaused() throws Exception {
+        RoomService rooms = new RoomService();
+        Room room = rooms.createRoom("survival", StudyType.TETRIS, "Host", "host", 2, 0, 20, "SURVIVAL");
+        rooms.joinRoom(room.getRoomId(), "Guest", "guest");
+        rooms.startGame(room);
+        TetrisGame game = (TetrisGame) room.getGameData();
+
+        Thread.sleep(120);
+        long beforePause = game.survivalElapsedMs();
+        assertThat(beforePause).isGreaterThan(0);
+
+        game.applyPause(true);
+        long atPause = game.survivalElapsedMs();
+        Thread.sleep(250);
+        long duringPause = game.survivalElapsedMs();
+
+        // 멈춘 동안 250ms가 지났지만 경과는 그대로여야 한다 (오차 20ms 허용)
+        assertThat(duringPause).isCloseTo(atPause, org.assertj.core.data.Offset.offset(20L));
+
+        game.applyPause(false);
+        Thread.sleep(120);
+        long afterResume = game.survivalElapsedMs();
+
+        // 재개하면 다시 흐르고, 멈춰 있던 250ms는 빠져 있어야 한다
+        assertThat(afterResume).isGreaterThan(duringPause);
+        assertThat(afterResume).isLessThan(duringPause + 250);
+    }
+
     /** 모든 참가자는 같은 구멍 순서를 받아야 공정한 경기가 된다. */
     @Test
     void survivalGameSharesOneGarbageHoleSequence() {

@@ -89,13 +89,19 @@ public class AppleSoloService {
             session.state.setFinished(true);
         }
         if (!session.state.isFinished() || session.recorded) return;
+        session.recorded = true;
 
+        // 한 칸도 정리하지 못한 판은 기록되지 않는다(AppleBoxRecordService의 규칙).
+        // 보드만 보고 새로 시작하는 판이 대부분 여기에 해당하므로 세션도 바로 비운다.
+        if (session.state.getScore() <= 0) {
+            sessions.remove(session.game.getInstanceId());
+            return;
+        }
         // 같은 판이 두 번 집계되지 않도록 instanceId를 키로 쓴다
         recordService.recordScores(
                 session.game.getInstanceId(),
                 Map.of(session.nickname, session.state.getScore())
         );
-        session.recorded = true;
     }
 
     private Map<String, Object> snapshot(SoloSession session) {
