@@ -30,9 +30,18 @@ import java.util.Set;
 public class TetrisRecordService {
     private static final int PLACEMENT_MATCHES = 5;
     private static final int INITIAL_RATING = 800;
-    private static final int PLACEMENT_K_FACTOR = 80;
-    private static final int RANKED_K_FACTOR = 32;
-    private static final double LOSS_RP_MULTIPLIER = 0.70;
+    /*
+     * 점수 변동폭.
+     *
+     * 한 판의 무게를 크게 잡아 한두 판으로도 티어가 눈에 띄게 움직이게 한다. 디비전이
+     * 100점이므로 동급 1:1에서 승 +36 / 패 -41 — 3승에 디비전이 오르고 3패에 떨어진다.
+     * 패배 배수를 1보다 크게 둬서 올라가는 것보다 떨어지는 게 조금 더 빠르다.
+     *
+     * 배치(5판)는 K를 더 크게 줘서 첫 자리를 빠르게 잡는다.
+     */
+    private static final int PLACEMENT_K_FACTOR = 120;
+    private static final int RANKED_K_FACTOR = 72;
+    private static final double LOSS_RP_MULTIPLIER = 1.15;
     private static final int MASTER_RATING = 2800;
     private static final int GRANDMASTER_RATING = 3200;
     private static final int CHALLENGER_RATING = 3600;

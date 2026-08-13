@@ -63,16 +63,21 @@ class TetrisRecordServiceTest {
                 .containsEntry("wins", 1);
     }
 
+    /**
+     * 한 판의 무게 — 동급끼리 붙으면 승 +36 / 패 -41이고, 디비전이 100점이므로
+     * 3승에 디비전이 오르고 3패에 떨어진다. 패배 쪽이 조금 더 크다.
+     */
     @Test
-    void lossesAreDiscountedToSeventyPercentOfEquivalentWins() {
+    void lossesMoveTheLadderSlightlyMoreThanEquivalentWins() {
         TetrisRecordService placement = new TetrisRecordService(
                 new ObjectMapper(),
                 tempDir.resolve("loss-discount-placement.json")
         );
         placement.recordCompletedMatch("placement-equal", List.of("A", "B"));
         Map<String, Map<String, Object>> placementRecords = placement.recordsFor(List.of("A", "B"));
-        assertThat(placementRecords.get("A")).containsEntry("lastRankDelta", 40);
-        assertThat(placementRecords.get("B")).containsEntry("lastRankDelta", -28);
+        // 배치는 K를 더 크게 줘서 첫 자리를 빠르게 잡는다
+        assertThat(placementRecords.get("A")).containsEntry("lastRankDelta", 60);
+        assertThat(placementRecords.get("B")).containsEntry("lastRankDelta", -69);
 
         Path rankedPath = tempDir.resolve("loss-discount-ranked.json");
         TetrisRecordService.RecordStore store = new TetrisRecordService.RecordStore();
@@ -91,8 +96,8 @@ class TetrisRecordServiceTest {
         TetrisRecordService ranked = new TetrisRecordService(new ObjectMapper(), rankedPath);
         ranked.recordCompletedMatch("ranked-equal", List.of("A", "B"));
         Map<String, Map<String, Object>> rankedRecords = ranked.recordsFor(List.of("A", "B"));
-        assertThat(rankedRecords.get("A")).containsEntry("lastRankDelta", 16);
-        assertThat(rankedRecords.get("B")).containsEntry("lastRankDelta", -11);
+        assertThat(rankedRecords.get("A")).containsEntry("lastRankDelta", 36);
+        assertThat(rankedRecords.get("B")).containsEntry("lastRankDelta", -41);
     }
 
     @Test
