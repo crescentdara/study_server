@@ -55,9 +55,6 @@ public class TetrisService {
             room.setGameData(game);
         }
         if ("TETRIS_PAUSE".equals(request.getMoveType())) {
-            if (player.getPlayerIndex() != 0) {
-                throw new IllegalArgumentException("Only the host can pause TETRIS.");
-            }
             // 멈춘 시간은 서바이벌 시계에서 빼야 하므로 applyPause로 누적한다
             game.applyPause(readPaused(request.getPayload(), !game.isPaused()));
             return buildInitialState(room);

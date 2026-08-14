@@ -50,14 +50,31 @@ public class AppleSoloService {
         return snapshot(session);
     }
 
-    /** 사각 범위 정리 시도 */
+    /** 사각 범위 정리 시도 — 퍼즈 중에는 시도 자체를 받지 않는다 */
     public Map<String, Object> clear(String instanceId, int r1, int c1, int r2, int c2) {
         SoloSession session = session(instanceId);
         synchronized (session) {
             boolean tooLate = session.game.elapsedSeconds()
                     > session.game.getDurationSeconds() + CLEAR_GRACE_SECONDS;
-            if (!session.state.isFinished() && !tooLate) {
+            if (!session.state.isFinished() && !session.game.isPaused() && !tooLate) {
                 session.game.tryClear(session.state, r1, c1, r2, c2);
+            }
+            settleIfDone(session);
+            return snapshot(session);
+        }
+    }
+
+    /**
+     * 퍼즈 전환 — P키로 화면을 가리는 동안 시계도 진짜로 멈춘다.
+     *
+     * 끝난 판은 멈출 이유가 없으므로 무시한다. 판이 끝난 뒤에 뒤늦게 도착한 퍼즈
+     * 요청 때문에 이미 확정된 기록이 흔들리는 일이 없도록 하기 위함이다.
+     */
+    public Map<String, Object> pause(String instanceId, boolean paused) {
+        SoloSession session = session(instanceId);
+        synchronized (session) {
+            if (!session.state.isFinished()) {
+                session.game.applyPause(paused);
             }
             settleIfDone(session);
             return snapshot(session);
@@ -122,6 +139,7 @@ public class AppleSoloService {
         gameData.put("instanceId", game.getInstanceId());
         gameData.put("durationSeconds", game.getDurationSeconds());
         gameData.put("remainingSeconds", game.remainingSeconds());
+        gameData.put("paused", game.isPaused());
         gameData.put("playerStates", Map.of(0, playerState));
         gameData.put("finalRanking", state.isFinished() ? List.of(0) : List.of());
         gameData.put("leaderboard", recordService.leaderboard(10));

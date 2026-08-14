@@ -179,6 +179,55 @@ class AppleSoloServiceTest {
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
+    /** 퍼즈 중에는 서버 시계가 실제로 멈춘다. */
+    @Test
+    void pausingStopsTheServerClock() throws Exception {
+        Map<String, Object> started = service.start("철수");
+        String instanceId = (String) started.get("instanceId");
+
+        service.pause(instanceId, true);
+        int remainingAtPause = (Integer) gameData(service.state(instanceId)).get("remainingSeconds");
+        Thread.sleep(1100);
+        int remainingDuringPause = (Integer) gameData(service.state(instanceId)).get("remainingSeconds");
+
+        assertThat(remainingDuringPause).isEqualTo(remainingAtPause);
+        assertThat((Boolean) gameData(service.state(instanceId)).get("paused")).isTrue();
+
+        service.pause(instanceId, false);
+        assertThat((Boolean) gameData(service.state(instanceId)).get("paused")).isFalse();
+    }
+
+    /** 퍼즈 중에는 정리 시도 자체가 반영되지 않는다 — 화면만 가리는 게 아니라 진짜로 멈춘다. */
+    @Test
+    void clearAttemptsAreIgnoredWhilePaused() {
+        Map<String, Object> started = service.start("철수");
+        String instanceId = (String) started.get("instanceId");
+        fixCells(started, 4, 6);
+
+        service.pause(instanceId, true);
+        Map<String, Object> whilePaused = service.clear(instanceId, 0, 0, 0, 1);
+        assertThat(whilePaused.get("score")).isEqualTo(0);
+
+        service.pause(instanceId, false);
+        Map<String, Object> afterResume = service.clear(instanceId, 0, 0, 0, 1);
+        assertThat(afterResume.get("score")).isEqualTo(2);
+    }
+
+    /** 이미 끝난 판은 퍼즈 요청이 와도 흔들리지 않는다. */
+    @Test
+    void pauseAfterFinishIsANoop() {
+        Map<String, Object> started = service.start("철수");
+        String instanceId = (String) started.get("instanceId");
+        fixCells(started, 4, 6);
+        service.clear(instanceId, 0, 0, 0, 1); // 0점 판은 finish 시 세션째 사라지므로 점수를 남겨 둔다
+
+        service.finish(instanceId);
+        Map<String, Object> result = service.pause(instanceId, true);
+
+        assertThat(result.get("finished")).isEqualTo(true);
+        assertThat((Boolean) gameData(result).get("paused")).isFalse();
+    }
+
     @Test
     void unknownSessionIsRejected() {
         assertThatThrownBy(() -> service.clear("no-such-session", 0, 0, 0, 1))

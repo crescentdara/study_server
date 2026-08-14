@@ -270,24 +270,24 @@ class TetrisServiceTest {
     }
 
     @Test
-    void onlyHostCanPauseTheWholeGame() {
+    void everyPlayerCanPauseAndResumeTheWholeGame() {
         Room room = playingRoom(2);
-
-        assertThatThrownBy(() -> service.processMove(
-                room,
-                room.getPlayers().get(1),
-                request("TETRIS_PAUSE", Map.of("paused", true))
-        ))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Only the host can pause TETRIS.");
 
         service.processMove(
                 room,
-                room.getPlayers().get(0),
+                room.getPlayers().get(1),
                 request("TETRIS_PAUSE", Map.of("paused", true))
         );
 
         assertThat(((TetrisGame) room.getGameData()).isPaused()).isTrue();
+
+        service.processMove(
+                room,
+                room.getPlayers().get(1),
+                request("TETRIS_PAUSE", Map.of("paused", false))
+        );
+
+        assertThat(((TetrisGame) room.getGameData()).isPaused()).isFalse();
     }
 
     /** 서바이벌 방은 mode=survival로 내려가고 랭크전이 아니다 — 클라이언트가 이 값으로 규칙을 바꾼다. */
