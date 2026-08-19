@@ -29,6 +29,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 @Service
 public class AppleSoloService {
+    private static final int REARRANGE_PENALTY_SECONDS = 10;
     /** 통신 지연을 감안해 제한 시간이 지난 직후 이만큼은 정리를 더 받아준다. */
     private static final long CLEAR_GRACE_SECONDS = 2;
     /** 브라우저를 그냥 닫은 판이 영구히 남지 않도록 정리하는 기준 */
@@ -43,9 +44,10 @@ public class AppleSoloService {
     }
 
     /** 새 판 시작 — 누른 순간 보드가 만들어지므로 대기 상태가 없다. */
-    public Map<String, Object> start(String nickname) {
+    public Map<String, Object> start(String nickname, String mode) {
         pruneStaleSessions();
-        SoloSession session = new SoloSession(displayName(nickname), new AppleBoxGame(1));
+        boolean clearAll = "CLEAR_ALL".equals(mode);
+        SoloSession session = new SoloSession(displayName(nickname), new AppleBoxGame(1, clearAll ? 0 : 120, clearAll ? "CLEAR_ALL" : "SPRINT"));
         sessions.put(session.game.getInstanceId(), session);
         return snapshot(session);
     }
@@ -54,7 +56,7 @@ public class AppleSoloService {
     public Map<String, Object> clear(String instanceId, int r1, int c1, int r2, int c2) {
         SoloSession session = session(instanceId);
         synchronized (session) {
-            boolean tooLate = session.game.elapsedSeconds()
+            boolean tooLate = session.game.getDurationSeconds() > 0 && session.game.elapsedSeconds()
                     > session.game.getDurationSeconds() + CLEAR_GRACE_SECONDS;
             if (!session.state.isFinished() && !session.game.isPaused() && !tooLate) {
                 session.game.tryClear(session.state, r1, c1, r2, c2);
@@ -92,6 +94,41 @@ public class AppleSoloService {
         }
     }
 
+    /** 남은 타일에 합계 10인 직사각형이 있는지 서버가 직접 판정한다. */
+    public Map<String, Object> verify(String instanceId) {
+        SoloSession session = session(instanceId);
+        synchronized (session) {
+            boolean available = hasAvailableMove(session.game, session.state);
+            session.lastVerification = available ? "AVAILABLE" : "STUCK";
+            return snapshot(session);
+        }
+    }
+
+    /** 막힌 올 클리어 판만, 남은 숫자의 위치만 섞어서 다시 진행 가능하게 만든다. */
+    public Map<String, Object> rearrange(String instanceId) {
+        SoloSession session = session(instanceId);
+        synchronized (session) {
+            if (!"CLEAR_ALL".equals(session.game.getMode())) throw new IllegalStateException("Rearrange is only available in clear-all mode.");
+            if (session.state.isFinished()) return snapshot(session);
+            if (hasAvailableMove(session.game, session.state)) throw new IllegalStateException("A removable tile group still exists.");
+            int[] board = session.game.getBoard();
+            List<Integer> open = new ArrayList<>();
+            List<Integer> values = new ArrayList<>();
+            for (int i = 0; i < board.length; i++) if (!session.state.getCleared().contains(i)) { open.add(i); values.add(board[i]); }
+            java.util.Random random = new java.util.Random();
+            boolean solved = false;
+            for (int attempt = 0; attempt < 3000 && !solved; attempt++) {
+                java.util.Collections.shuffle(values, random);
+                for (int i = 0; i < open.size(); i++) board[open.get(i)] = values.get(i);
+                solved = hasAvailableMove(session.game, session.state);
+            }
+            if (!solved) throw new IllegalStateException("Could not create a playable rearrangement.");
+            session.rearranges++;
+            session.lastVerification = "REARRANGED";
+            return snapshot(session);
+        }
+    }
+
     /** 현재 상태 조회 (새로 고침 후 이어보기용) */
     public Map<String, Object> state(String instanceId) {
         SoloSession session = session(instanceId);
@@ -115,10 +152,12 @@ public class AppleSoloService {
             return;
         }
         // 같은 판이 두 번 집계되지 않도록 instanceId를 키로 쓴다
-        recordService.recordScores(
-                session.game.getInstanceId(),
-                Map.of(session.nickname, session.state.getScore())
-        );
+        if ("CLEAR_ALL".equals(session.game.getMode()) && session.state.getScore() >= AppleBoxGame.CELL_COUNT) {
+            recordService.recordClearTime(session.game.getInstanceId(), session.nickname,
+                    session.game.elapsedSeconds() + (long) session.rearranges * REARRANGE_PENALTY_SECONDS, session.rearranges);
+        } else if ("SPRINT".equals(session.game.getMode())) {
+            recordService.recordScores(session.game.getInstanceId(), Map.of(session.nickname, session.state.getScore()));
+        }
     }
 
     private Map<String, Object> snapshot(SoloSession session) {
@@ -139,6 +178,12 @@ public class AppleSoloService {
         gameData.put("instanceId", game.getInstanceId());
         gameData.put("durationSeconds", game.getDurationSeconds());
         gameData.put("remainingSeconds", game.remainingSeconds());
+        gameData.put("mode", game.getMode());
+        gameData.put("elapsedSeconds", game.elapsedSeconds());
+        gameData.put("rearranges", session.rearranges);
+        gameData.put("rearrangePenaltySeconds", session.rearranges * REARRANGE_PENALTY_SECONDS);
+        gameData.put("effectiveElapsedSeconds", game.elapsedSeconds() + (long) session.rearranges * REARRANGE_PENALTY_SECONDS);
+        gameData.put("verification", session.lastVerification);
         gameData.put("paused", game.isPaused());
         gameData.put("playerStates", Map.of(0, playerState));
         gameData.put("finalRanking", state.isFinished() ? List.of(0) : List.of());
@@ -159,6 +204,17 @@ public class AppleSoloService {
         SoloSession session = instanceId == null ? null : sessions.get(instanceId);
         if (session == null) throw new IllegalArgumentException("Unknown APPLE_BOX solo session.");
         return session;
+    }
+
+    private boolean hasAvailableMove(AppleBoxGame game, AppleBoxPlayerState state) {
+        int[] board = game.getBoard();
+        for (int top = 0; top < AppleBoxGame.ROWS; top++) for (int left = 0; left < AppleBoxGame.COLS; left++)
+            for (int bottom = top; bottom < AppleBoxGame.ROWS; bottom++) for (int right = left; right < AppleBoxGame.COLS; right++) {
+                int sum = 0; boolean any = false;
+                for (int row = top; row <= bottom; row++) for (int col = left; col <= right; col++) { int index = row * AppleBoxGame.COLS + col; if (!state.getCleared().contains(index)) { sum += board[index]; any = true; } }
+                if (any && sum == AppleBoxGame.TARGET) return true;
+            }
+        return false;
     }
 
     /**
@@ -190,6 +246,8 @@ public class AppleSoloService {
         private final AppleBoxPlayerState state = new AppleBoxPlayerState();
         private final long createdAt = System.currentTimeMillis();
         private boolean recorded;
+        private int rearranges;
+        private String lastVerification = "";
 
         private SoloSession(String nickname, AppleBoxGame game) {
             this.nickname = nickname;

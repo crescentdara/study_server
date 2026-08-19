@@ -94,6 +94,17 @@ public class AppleBoxRecordService {
         return true;
     }
 
+    /** 올 클리어는 점수가 고정이므로 완료 시간(초)과 재배치 횟수를 별도 보관한다. */
+    public synchronized boolean recordClearTime(String matchId, String nickname, long seconds, int rearranges) {
+        if (matchId == null || matchId.isBlank() || store.recordedMatchIds.contains(matchId)) return false;
+        String name = displayName(nickname); if (name.isBlank()) return false;
+        long now = System.currentTimeMillis(); rollWeekIfNeeded(now);
+        PlayerRecord record = store.players.computeIfAbsent(key(name), ignored -> new PlayerRecord());
+        record.nickname = name; record.clearGames++; record.clearLastSeconds = Math.max(0, seconds); record.clearLastRearranges = Math.max(0, rearranges);
+        if (record.clearBestSeconds == 0 || record.clearLastSeconds < record.clearBestSeconds) record.clearBestSeconds = record.clearLastSeconds;
+        store.recordedMatchIds.add(matchId); persist(); return true;
+    }
+
     private void applyScore(Map<String, PlayerRecord> ledger, String name, int score, long now) {
         PlayerRecord record = ledger.computeIfAbsent(key(name), ignored -> new PlayerRecord());
         record.nickname = name;
@@ -193,6 +204,10 @@ public class AppleBoxRecordService {
         result.put("lastScore", record.lastScore);
         result.put("average", record.games == 0 ? 0 : Math.round((double) record.totalScore / record.games));
         result.put("lastPlayedAt", record.lastPlayedAt);
+        result.put("clearBestSeconds", record.clearBestSeconds);
+        result.put("clearLastSeconds", record.clearLastSeconds);
+        result.put("clearLastRearranges", record.clearLastRearranges);
+        result.put("clearGames", record.clearGames);
         return result;
     }
 
@@ -205,6 +220,10 @@ public class AppleBoxRecordService {
         result.put("lastScore", 0);
         result.put("average", 0);
         result.put("lastPlayedAt", 0L);
+        result.put("clearBestSeconds", 0L);
+        result.put("clearLastSeconds", 0L);
+        result.put("clearLastRearranges", 0);
+        result.put("clearGames", 0);
         return result;
     }
 
@@ -265,5 +284,9 @@ public class AppleBoxRecordService {
         public int lastScore;
         public long bestAt;
         public long lastPlayedAt;
+        public long clearBestSeconds;
+        public long clearLastSeconds;
+        public int clearLastRearranges;
+        public int clearGames;
     }
 }
