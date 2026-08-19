@@ -17,7 +17,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/chat/lobby/warnings")
 public class ChatWarningController {
-    private static final String MODERATOR_NICKNAME = "뚱이";
+    private static final String MODERATOR_NICKNAME = "막냉";
     private final ChatWarningService warningService;
     private final SimpMessagingTemplate messagingTemplate;
 
@@ -65,7 +65,7 @@ public class ChatWarningController {
 
     private void validateModeratorAndTarget(ChatWarningRequest request) {
         if (request == null || !MODERATOR_NICKNAME.equals(normalize(request.getModeratorNickname()))) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only 뚱이 can manage warning cards.");
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only 막냉 can manage warning cards.");
         }
         String target = normalize(request.getTargetNickname());
         if (target.isBlank() || MODERATOR_NICKNAME.equals(target)) {
