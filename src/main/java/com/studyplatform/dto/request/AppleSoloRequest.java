@@ -18,5 +18,4 @@ public class AppleSoloRequest {
     private int r2;
     private int c2;
     private boolean paused;
-    private String mode;
 }

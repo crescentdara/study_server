@@ -50,7 +50,7 @@ public class AppleController {
     /** 새 판 시작 — 누른 순간 보드가 만들어지고 바로 시작한다 */
     @PostMapping("/start")
     public Map<String, Object> start(@RequestBody(required = false) AppleSoloRequest request) {
-        return soloService.start(request == null ? null : request.getNickname(), request == null ? null : request.getMode());
+        return soloService.start(request == null ? null : request.getNickname());
     }
 
     /** 드래그한 사각 범위 정리 시도 (합이 10인지는 서버가 검증) */
@@ -66,16 +66,6 @@ public class AppleController {
     @PostMapping("/finish")
     public Map<String, Object> finish(@RequestBody AppleSoloRequest request) {
         return expired(() -> soloService.finish(request.getInstanceId()));
-    }
-
-    @PostMapping("/verify")
-    public Map<String, Object> verify(@RequestBody AppleSoloRequest request) {
-        return expired(() -> soloService.verify(request.getInstanceId()));
-    }
-
-    @PostMapping("/rearrange")
-    public Map<String, Object> rearrange(@RequestBody AppleSoloRequest request) {
-        return expired(() -> soloService.rearrange(request.getInstanceId()));
     }
 
     /** 퍼즈 전환 (P키) — 화면을 가리는 동안 시간도 함께 멈춘다 */

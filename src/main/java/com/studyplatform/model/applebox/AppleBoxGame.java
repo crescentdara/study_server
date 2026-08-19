@@ -33,7 +33,6 @@ public class AppleBoxGame {
 
     private final int numPlayers;
     private final int durationSeconds;
-    private final String mode;
     private final int[] board = new int[CELL_COUNT];
     private final Map<Integer, AppleBoxPlayerState> playerStates = new ConcurrentHashMap<>();
     private final List<Integer> finalRanking = new CopyOnWriteArrayList<>();
@@ -61,12 +60,8 @@ public class AppleBoxGame {
     }
 
     public AppleBoxGame(int numPlayers, int durationSeconds) {
-        this(numPlayers, durationSeconds, "SPRINT");
-    }
-    public AppleBoxGame(int numPlayers, int durationSeconds, String mode) {
         this.numPlayers = Math.max(1, numPlayers);
-        this.durationSeconds = durationSeconds <= 0 ? 0 : Math.max(30, durationSeconds);
-        this.mode = "CLEAR_ALL".equals(mode) ? "CLEAR_ALL" : "SPRINT";
+        this.durationSeconds = Math.max(30, durationSeconds);
         fillBoard();
         for (int index = 0; index < this.numPlayers; index += 1) {
             playerStates.put(index, new AppleBoxPlayerState());
@@ -136,12 +131,11 @@ public class AppleBoxGame {
 
     /** 남은 초 (0 이하로는 내려가지 않음) */
     public int remainingSeconds() {
-        if (durationSeconds == 0) return 0;
         return (int) Math.max(0, durationSeconds - elapsedSeconds());
     }
 
     public boolean timeUp() {
-        return durationSeconds > 0 && remainingSeconds() <= 0;
+        return remainingSeconds() <= 0;
     }
 
     /** 일시정지 상태를 바꾸면서 멈춘 시간을 누적한다 */
