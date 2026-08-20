@@ -15,6 +15,7 @@ bin/
 # Spring Boot 로그
 *.log
 logs/
+data/lunch-votes.json
 
 # 환경 설정 파일 (비밀번호 등 민감 정보)
 application-local.properties
