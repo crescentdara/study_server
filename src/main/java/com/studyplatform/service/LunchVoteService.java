@@ -32,7 +32,7 @@ public class LunchVoteService {
         this.store = load();
     }
 
-    public synchronized Map<String, Object> today() { return view(current()); }
+    public synchronized Map<String, Object> today(String nickname) { return view(current(), nickname); }
 
     public synchronized Map<String, Object> addMenu(String nickname, String menu) {
         String name = clean(nickname); String meal = clean(menu);
@@ -43,7 +43,7 @@ public class LunchVoteService {
             throw new IllegalArgumentException("오늘은 메뉴를 이미 등록했습니다.");
         }
         MenuRecord item = new MenuRecord(); item.id = UUID.randomUUID().toString(); item.nickname = name; item.menu = meal;
-        day.menus.add(item); persist(); return view(day);
+        day.menus.add(item); persist(); return view(day, name);
     }
 
     public synchronized Map<String, Object> vote(String nickname, String menuId) {
@@ -52,8 +52,8 @@ public class LunchVoteService {
         DayRecord day = current();
         MenuRecord target = day.menus.stream().filter(item -> item.id.equals(id)).findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("메뉴를 찾을 수 없습니다."));
-        if (key(target.nickname).equals(key(name))) throw new IllegalArgumentException("내가 등록한 메뉴에는 투표할 수 없습니다.");
-        day.votes.put(key(name), id); persist(); return view(day);
+        if (day.votes.containsKey(key(name))) throw new IllegalArgumentException("오늘은 이미 투표했습니다.");
+        day.votes.put(key(name), id); persist(); return view(day, name);
     }
 
     private DayRecord current() {
@@ -64,13 +64,13 @@ public class LunchVoteService {
         return record;
     }
 
-    private Map<String, Object> view(DayRecord day) {
+    private Map<String, Object> view(DayRecord day, String nickname) {
         Map<String, Integer> counts = new LinkedHashMap<>();
         for (String vote : day.votes.values()) counts.merge(vote, 1, Integer::sum);
         int top = counts.values().stream().max(Integer::compareTo).orElse(0);
         List<Map<String, Object>> menus = day.menus.stream().sorted(Comparator.comparing((MenuRecord item) -> counts.getOrDefault(item.id, 0)).reversed())
                 .map(item -> { Map<String, Object> row = new LinkedHashMap<>(); row.put("id", item.id); row.put("menu", item.menu); row.put("nickname", item.nickname); row.put("votes", counts.getOrDefault(item.id, 0)); row.put("winner", top > 0 && counts.getOrDefault(item.id, 0) == top); return row; }).toList();
-        Map<String, Object> result = new LinkedHashMap<>(); result.put("date", day.date); result.put("menus", menus); result.put("voterCount", day.votes.size()); return result;
+        Map<String, Object> result = new LinkedHashMap<>(); result.put("date", day.date); result.put("menus", menus); result.put("voterCount", day.votes.size()); result.put("myVoteMenuId", day.votes.get(key(nickname))); return result;
     }
 
     private LunchStore load() {
