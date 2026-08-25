@@ -2,6 +2,7 @@ package com.studyplatform.controller;
 
 import com.studyplatform.dto.request.ChatWarningRequest;
 import com.studyplatform.service.ChatWarningService;
+import com.studyplatform.service.LunchVoteService;
 import org.springframework.http.HttpStatus;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -17,12 +18,13 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/chat/lobby/warnings")
 public class ChatWarningController {
-    private static final String MODERATOR_NICKNAME = "막냉";
     private final ChatWarningService warningService;
+    private final LunchVoteService lunchVoteService;
     private final SimpMessagingTemplate messagingTemplate;
 
-    public ChatWarningController(ChatWarningService warningService, SimpMessagingTemplate messagingTemplate) {
+    public ChatWarningController(ChatWarningService warningService, LunchVoteService lunchVoteService, SimpMessagingTemplate messagingTemplate) {
         this.warningService = warningService;
+        this.lunchVoteService = lunchVoteService;
         this.messagingTemplate = messagingTemplate;
     }
 
@@ -64,11 +66,11 @@ public class ChatWarningController {
     }
 
     private void validateModeratorAndTarget(ChatWarningRequest request) {
-        if (request == null || !MODERATOR_NICKNAME.equals(normalize(request.getModeratorNickname()))) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only 막냉 can manage warning cards.");
+        if (request == null || !lunchVoteService.isTodayWinner(normalize(request.getModeratorNickname()))) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only today's lunch vote winner can manage warning cards.");
         }
         String target = normalize(request.getTargetNickname());
-        if (target.isBlank() || MODERATOR_NICKNAME.equals(target)) {
+        if (target.isBlank() || target.equals(normalize(request.getModeratorNickname()))) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Select another chat participant.");
         }
     }

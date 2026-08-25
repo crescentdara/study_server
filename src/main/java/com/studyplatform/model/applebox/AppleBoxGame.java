@@ -49,11 +49,8 @@ public class AppleBoxGame {
      * 퍼즈가 아니게 된다. 반대로 정말 멈추면 악용 여지가 있는 건 알지만(안 지운
      * 칸을 몰래 분석하는 등), 이건 사내에서 양심에 맡기기로 한 트레이드오프다.
      */
-    private boolean paused = false;
     /** 일시정지 중이면 그 시각, 진행 중이면 0 */
-    private long pausedAt = 0;
     /** 지금까지 멈춰 있던 시간 합계 */
-    private long pausedTotalMs = 0;
 
     public AppleBoxGame(int numPlayers) {
         this(numPlayers, 120);
@@ -125,8 +122,7 @@ public class AppleBoxGame {
     /** 시작 후 경과 초 — 멈춰 있던 시간은 빼고 센다 */
     public long elapsedSeconds() {
         long now = System.currentTimeMillis();
-        long paused = pausedTotalMs + (pausedAt > 0 ? now - pausedAt : 0);
-        return Math.max(0, now - startedAt - paused) / 1000L;
+        return Math.max(0, now - startedAt) / 1000L;
     }
 
     /** 남은 초 (0 이하로는 내려가지 않음) */
@@ -139,14 +135,4 @@ public class AppleBoxGame {
     }
 
     /** 일시정지 상태를 바꾸면서 멈춘 시간을 누적한다 */
-    public void applyPause(boolean nextPaused) {
-        long now = System.currentTimeMillis();
-        if (nextPaused && pausedAt == 0) {
-            pausedAt = now;
-        } else if (!nextPaused && pausedAt > 0) {
-            pausedTotalMs += now - pausedAt;
-            pausedAt = 0;
-        }
-        this.paused = nextPaused;
-    }
 }

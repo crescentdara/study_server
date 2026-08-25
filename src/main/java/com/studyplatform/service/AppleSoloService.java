@@ -56,7 +56,7 @@ public class AppleSoloService {
         synchronized (session) {
             boolean tooLate = session.game.elapsedSeconds()
                     > session.game.getDurationSeconds() + CLEAR_GRACE_SECONDS;
-            if (!session.state.isFinished() && !session.game.isPaused() && !tooLate) {
+            if (!session.state.isFinished() && !tooLate) {
                 session.game.tryClear(session.state, r1, c1, r2, c2);
             }
             settleIfDone(session);
@@ -70,17 +70,6 @@ public class AppleSoloService {
      * 끝난 판은 멈출 이유가 없으므로 무시한다. 판이 끝난 뒤에 뒤늦게 도착한 퍼즈
      * 요청 때문에 이미 확정된 기록이 흔들리는 일이 없도록 하기 위함이다.
      */
-    public Map<String, Object> pause(String instanceId, boolean paused) {
-        SoloSession session = session(instanceId);
-        synchronized (session) {
-            if (!session.state.isFinished()) {
-                session.game.applyPause(paused);
-            }
-            settleIfDone(session);
-            return snapshot(session);
-        }
-    }
-
     /** 제한 시간이 끝났거나 그만두었음을 알린다 — 이 시점에 랭킹에 기록된다. */
     public Map<String, Object> finish(String instanceId) {
         SoloSession session = session(instanceId);
@@ -139,7 +128,6 @@ public class AppleSoloService {
         gameData.put("instanceId", game.getInstanceId());
         gameData.put("durationSeconds", game.getDurationSeconds());
         gameData.put("remainingSeconds", game.remainingSeconds());
-        gameData.put("paused", game.isPaused());
         gameData.put("playerStates", Map.of(0, playerState));
         gameData.put("finalRanking", state.isFinished() ? List.of(0) : List.of());
         gameData.put("leaderboard", recordService.leaderboard(10));

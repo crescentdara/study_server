@@ -69,11 +69,6 @@ public class AppleController {
     }
 
     /** 퍼즈 전환 (P키) — 화면을 가리는 동안 시간도 함께 멈춘다 */
-    @PostMapping("/pause")
-    public Map<String, Object> pause(@RequestBody AppleSoloRequest request) {
-        return expired(() -> soloService.pause(request.getInstanceId(), request.isPaused()));
-    }
-
     /** 현재 상태 조회 */
     @GetMapping("/state")
     public Map<String, Object> state(@RequestParam String instanceId) {
