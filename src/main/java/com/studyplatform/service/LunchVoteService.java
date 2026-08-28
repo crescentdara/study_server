@@ -37,7 +37,7 @@ public class LunchVoteService {
     public synchronized Map<String, Object> addMenu(String nickname, String menu) {
         String name = clean(nickname); String meal = clean(menu);
         if (name.isBlank()) throw new IllegalArgumentException("닉네임을 먼저 입력하세요.");
-        if (meal.isBlank() || meal.length() > 30) throw new IllegalArgumentException("메뉴는 1~30자로 입력하세요.");
+        if (meal.isBlank() || meal.length() > 100) throw new IllegalArgumentException("메뉴는 1~100자로 입력하세요.");
         DayRecord day = current();
         if (day.menus.stream().anyMatch(item -> key(item.nickname).equals(key(name)))) {
             throw new IllegalArgumentException("오늘은 메뉴를 이미 등록했습니다.");
