@@ -1,7 +1,7 @@
 # GitHub Actions 화면에 표시되는 Workflow 이름
 name: Backend CI/CD
 
-# main 브랜치에 push가 발생하면 실행
+# main 브랜치에 push가 발생하면 Workflow 실행
 on:
   push:
     branches:
@@ -14,26 +14,26 @@ jobs:
   # 1. 백엔드 CI 빌드
   # =========================================================
   #
-  # GitHub가 제공하는 임시 Windows Runner에서 실행
+  # GitHub에서 제공하는 임시 Windows Runner에서 실행
   #
   # 역할:
-  # - Repository checkout
+  # - GitHub Repository 소스 다운로드
   # - Java 17 설치
   # - Maven 빌드
   # - JAR 생성
-  # - JAR을 Artifact로 저장
+  # - 생성된 JAR을 Artifact로 업로드
   #
   # =========================================================
   backend-build:
 
-    # GitHub에서 제공하는 임시 Windows 서버
-    # 실제 운영 서버가 아님
+    # 실제 배포 서버가 아니라
+    # GitHub가 제공하는 임시 Windows 서버 사용
     runs-on: windows-latest
 
     steps:
 
       # -----------------------------------------------------
-      # GitHub Repository 소스 다운로드
+      # Repository 소스 다운로드
       # -----------------------------------------------------
       - name: Checkout source
         uses: actions/checkout@v4
@@ -42,11 +42,11 @@ jobs:
       # -----------------------------------------------------
       # Java 17 설치
       #
-      # 현재 Spring Boot 프로젝트가 Java 17 기준
+      # distribution: temurin
+      # → Eclipse Temurin JDK 사용
       #
       # cache: maven
-      # → Maven dependency를 캐싱해서
-      #   다음 빌드 시간을 줄여줌
+      # → Maven dependency 캐시 사용
       # -----------------------------------------------------
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -57,17 +57,17 @@ jobs:
 
 
       # -----------------------------------------------------
-      # Maven Build
+      # Maven 빌드
       #
       # clean
       # → 기존 target 폴더 삭제
       #
       # package
-      # → 컴파일 후 JAR 생성
+      # → 컴파일 및 JAR 생성
       #
       # -DskipTests
-      # → 테스트 코드는 컴파일하지만
-      #   테스트 실행은 하지 않음
+      # → 테스트 코드는 컴파일
+      # → 테스트 실행만 생략
       #
       # 성공하면:
       #
@@ -81,12 +81,13 @@ jobs:
 
 
       # -----------------------------------------------------
-      # 생성된 JAR을 GitHub Artifact로 저장
+      # 생성된 JAR을 Artifact로 업로드
       #
-      # CI 빌드는 GitHub 서버에서 실행되고
-      # 실제 배포는 우리 Windows 서버에서 실행되므로
-      # Artifact를 통해 JAR을 전달
+      # GitHub-hosted Runner에서 만든 JAR을
+      # 실제 배포 서버의 self-hosted Runner로
+      # 전달하기 위해 사용
       #
+      # Artifact 보관 기간은 7일
       # -----------------------------------------------------
       - name: Upload backend artifact
         uses: actions/upload-artifact@v4
@@ -101,10 +102,12 @@ jobs:
   # 2. 실제 백엔드 배포
   # =========================================================
   #
-  # 여기부터는 GitHub 서버가 아니라
-  # 실제 Windows 운영 서버에서 실행
+  # 여기부터는 실제 Windows 배포 서버에서 실행
   #
-  # 실제 대상:
+  # Runner:
+  # self-hosted + backend
+  #
+  # 최종 배포 위치:
   #
   # C:\perpur\back\
   #   study-server-0.0.1-SNAPSHOT.jar
@@ -115,24 +118,20 @@ jobs:
     # backend-build가 성공한 경우에만 실행
     needs: backend-build
 
-
-    # 실제 운영 서버의 self-hosted Runner 사용
-    #
-    # backend Label을 가진 Runner만 이 Job을 가져감
+    # backend label이 붙은 self-hosted Runner 사용
     runs-on: [self-hosted, backend]
-
 
     steps:
 
       # -----------------------------------------------------
-      # CI에서 생성한 JAR Artifact 다운로드
+      # CI 단계에서 생성한 JAR Artifact 다운로드
       #
-      # 다운로드 위치:
+      # Runner의 작업 폴더에:
       #
       # backend-artifact\
       #   study-server-0.0.1-SNAPSHOT.jar
       #
-      # 이 위치는 Runner의 _work 아래 임시 작업공간
+      # 형태로 다운로드됨
       # -----------------------------------------------------
       - name: Download backend artifact
         uses: actions/download-artifact@v4
@@ -142,17 +141,14 @@ jobs:
 
 
       # -----------------------------------------------------
-      # 기존 Spring Boot 애플리케이션 종료
+      # 현재 실행 중인 기존 Spring Boot 서버 종료
       #
-      # 현재 실행 중인 java.exe 중
-      # CommandLine에
+      # 기존에 java 또는 javaw로 실행했을 수 있으므로
+      # java.exe / javaw.exe 모두 검사
       #
-      # study-server-0.0.1-SNAPSHOT.jar
-      #
-      # 문자열이 포함된 프로세스를 찾아 종료
-      #
-      # 다른 Java 프로그램은 종료하지 않도록
-      # JAR 이름으로 필터링
+      # 단순히 Java 전체를 죽이는 것이 아니라
+      # CommandLine에 대상 JAR 이름이 포함된
+      # 프로세스만 종료
       # -----------------------------------------------------
       - name: Stop existing backend
         shell: powershell
@@ -165,61 +161,100 @@ jobs:
           Write-Host "JAR : $jarName"
           Write-Host "===================================="
 
+
+          # 실행 중인 대상 Spring Boot 프로세스 검색
           $processes = Get-CimInstance Win32_Process |
               Where-Object {
-                  $_.Name -eq "java.exe" -and
+                  ($_.Name -eq "java.exe" -or $_.Name -eq "javaw.exe") -and
                   $_.CommandLine -like "*$jarName*"
               }
+
 
           if ($processes) {
 
               foreach ($process in $processes) {
 
-                  Write-Host "Stopping PID : $($process.ProcessId)"
+                  Write-Host ""
+                  Write-Host "Stopping process..."
+                  Write-Host "PID  : $($process.ProcessId)"
+                  Write-Host "Name : $($process.Name)"
+                  Write-Host "CMD  : $($process.CommandLine)"
 
+                  # 기존 백엔드 강제 종료
                   Stop-Process `
                     -Id $process.ProcessId `
-                    -Force
+                    -Force `
+                    -ErrorAction Stop
               }
 
-              Write-Host "Backend stopped."
 
-              # 프로세스 종료가 완료될 시간을 조금 줌
-              Start-Sleep -Seconds 3
+              # Windows가 JAR 파일 Lock을 해제할 시간을 줌
+              Start-Sleep -Seconds 5
           }
           else {
 
-              # 최초 배포이거나 이미 서버가 종료된 경우
-              # 오류로 처리하지 않고 그대로 진행
+              # 최초 배포이거나 이미 종료되어 있는 경우
+              # 오류로 처리하지 않고 계속 진행
+              Write-Host ""
               Write-Host "Running backend process not found."
           }
 
 
+          # -------------------------------------------------
+          # 프로세스가 실제로 종료되었는지 다시 확인
+          # -------------------------------------------------
+          $remaining = Get-CimInstance Win32_Process |
+              Where-Object {
+                  ($_.Name -eq "java.exe" -or $_.Name -eq "javaw.exe") -and
+                  $_.CommandLine -like "*$jarName*"
+              }
+
+
+          if ($remaining) {
+
+              Write-Error "Backend process is still running."
+
+              $remaining |
+                  Select-Object ProcessId, Name, CommandLine
+
+              # 배포 중단
+              exit 1
+          }
+
+
+          Write-Host ""
+          Write-Host "Backend process stopped successfully."
+
+
+
       # -----------------------------------------------------
-      # 새로운 JAR 배포
+      # 새로운 JAR 실제 운영 경로에 배포
       #
-      # 다운로드한 Artifact:
+      # Artifact:
       #
       # .\backend-artifact\
       #   study-server-0.0.1-SNAPSHOT.jar
       #
-      # 를
+      # ↓
       #
       # C:\perpur\back\
       #   study-server-0.0.1-SNAPSHOT.jar
       #
-      # 로 덮어씀
       # -----------------------------------------------------
       - name: Deploy backend jar
         shell: powershell
         run: |
 
+          # 실제 백엔드 배포 디렉터리
           $deployPath = "C:\perpur\back"
 
+          # JAR 파일명
           $jarName = "study-server-0.0.1-SNAPSHOT.jar"
 
+          # 실제 운영 JAR 전체 경로
           $targetJar = Join-Path $deployPath $jarName
 
+          # Artifact로 다운로드 받은 새 JAR
           $sourceJar = ".\backend-artifact\$jarName"
 
 
@@ -230,7 +265,9 @@ jobs:
           Write-Host "===================================="
 
 
+          # -------------------------------------------------
           # 배포 폴더가 없으면 생성
+          # -------------------------------------------------
           if (!(Test-Path $deployPath)) {
 
               Write-Host "Creating backend directory..."
@@ -242,55 +279,74 @@ jobs:
           }
 
 
-          # 기존 JAR 파일이 존재하면 삭제
+          # -------------------------------------------------
+          # 기존 JAR 삭제
+          #
+          # 앞 단계에서 프로세스를 종료했기 때문에
+          # 정상이라면 파일 Lock이 풀려 있어야 함
+          # -------------------------------------------------
           if (Test-Path $targetJar) {
 
+              Write-Host ""
               Write-Host "Removing old JAR..."
 
               Remove-Item `
                 $targetJar `
-                -Force
+                -Force `
+                -ErrorAction Stop
           }
 
 
-          # 새 JAR 복사
+          # -------------------------------------------------
+          # 새로운 JAR 복사
+          # -------------------------------------------------
+          Write-Host ""
           Write-Host "Copying new JAR..."
 
           Copy-Item `
             -Path $sourceJar `
             -Destination $targetJar `
-            -Force
+            -Force `
+            -ErrorAction Stop
 
 
           Write-Host ""
           Write-Host "Backend JAR deployed."
 
-          # 배포된 JAR 정보 확인
+
+          # -------------------------------------------------
+          # 실제 배포된 JAR 정보 출력
+          #
+          # GitHub Actions 로그에서
+          # 수정시간과 파일 크기 확인 가능
+          # -------------------------------------------------
           Get-Item $targetJar |
               Select-Object FullName, LastWriteTime, Length
 
 
+
       # -----------------------------------------------------
-      # Spring Boot 재실행
+      # 새로운 Spring Boot 서버 시작
       #
-      # Start-Process를 사용하여
-      # GitHub Actions Job이 끝나도 Java 프로세스는 계속 실행
+      # javaw.exe 사용
       #
-      # WorkingDirectory:
-      # C:\perpur\back
+      # 이유:
+      # - 콘솔창 없이 백그라운드 실행
+      # - GitHub Actions Job이 끝나더라도
+      #   서버 프로세스는 계속 실행
       #
-      # java -jar study-server-0.0.1-SNAPSHOT.jar
+      # 실행 형태:
       #
-      # 형태로 실행
+      # javaw.exe -jar
+      # C:\perpur\back\study-server-0.0.1-SNAPSHOT.jar
+      #
       # -----------------------------------------------------
       - name: Start backend
         shell: powershell
         run: |
 
           $deployPath = "C:\perpur\back"
-
           $jarName = "study-server-0.0.1-SNAPSHOT.jar"
-
           $jarPath = Join-Path $deployPath $jarName
 
 
@@ -300,32 +356,42 @@ jobs:
           Write-Host "===================================="
 
 
+          # -------------------------------------------------
+          # javaw.exe를 이용해 백그라운드 실행
+          # -------------------------------------------------
           Start-Process `
-            -FilePath "java" `
+            -FilePath "javaw.exe" `
             -ArgumentList "-jar `"$jarPath`"" `
             -WorkingDirectory $deployPath `
             -WindowStyle Hidden
 
 
-          # Spring Boot가 올라올 시간을 조금 기다림
-          Start-Sleep -Seconds 5
+          # Spring Boot 기동 대기
+          #
+          # 서버 환경에 따라 필요하면
+          # 10~20초로 늘려도 됨
+          Start-Sleep -Seconds 10
 
 
           Write-Host ""
           Write-Host "Backend start command executed."
 
 
+
       # -----------------------------------------------------
-      # 실행 여부 확인
+      # 실제 백엔드 프로세스 실행 여부 검증
       #
-      # java.exe 중 해당 JAR이 포함된 프로세스가
-      # 실제 존재하는지 확인
+      # java.exe / javaw.exe 중
+      # 해당 JAR을 실행하는 프로세스가 있는지 확인
+      #
+      # 없으면 Workflow 실패 처리
       # -----------------------------------------------------
       - name: Verify backend process
         shell: powershell
         run: |
 
           $jarName = "study-server-0.0.1-SNAPSHOT.jar"
+
 
           Write-Host "===================================="
           Write-Host "Backend Process Check"
@@ -334,14 +400,15 @@ jobs:
 
           $process = Get-CimInstance Win32_Process |
               Where-Object {
-                  $_.Name -eq "java.exe" -and
+                  ($_.Name -eq "java.exe" -or $_.Name -eq "javaw.exe") -and
                   $_.CommandLine -like "*$jarName*"
               }
 
 
           if ($process) {
 
-              Write-Host "Backend is running."
+              Write-Host ""
+              Write-Host "Backend is running successfully."
 
               $process |
                   Select-Object ProcessId, Name, CommandLine
@@ -350,6 +417,6 @@ jobs:
 
               Write-Error "Backend process was not started."
 
-              # Workflow 실패 처리
+              # 프로세스를 찾지 못하면 Workflow 실패
               exit 1
           }
