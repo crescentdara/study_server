@@ -1,4 +1,4 @@
-name: CI Test
+name: Backend CI
 
 on:
   push:
@@ -6,12 +6,19 @@ on:
       - main
 
 jobs:
-  test:
+  build:
     runs-on: windows-latest
 
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: CI Test
-        run: echo "CI 실행 성공"
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Build Spring Boot
+        run: mvn clean package -DskipTests
