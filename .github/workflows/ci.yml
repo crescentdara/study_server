@@ -1,4 +1,4 @@
-name: Backend CI
+name: Backend CI/CD
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
       - main
 
 jobs:
-  build:
+  backend-build:
     runs-on: windows-latest
 
     steps:
@@ -20,11 +20,24 @@ jobs:
           java-version: '17'
           cache: maven
 
-      - name: Build Spring Boot
+      - name: Build backend
         run: mvn clean package -DskipTests
 
-      - name: Upload Backend Artifact
+      - name: Upload backend artifact
         uses: actions/upload-artifact@v4
         with:
           name: backend-jar
           path: target/*.jar
+          retention-days: 7
+
+  backend-deploy-test:
+    needs: backend-build
+    runs-on: [self-hosted, backend]
+
+    steps:
+      - name: Backend Runner Test
+        run: |
+          echo "Backend Runner OK"
+          hostname
+          whoami
+          pwd
