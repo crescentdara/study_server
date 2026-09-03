@@ -21,24 +21,34 @@ public class LobbyDrawingService {
     private static final Pattern HEX_COLOR = Pattern.compile("#[0-9a-f]{6}");
 
     private final Map<String, LobbyDrawingStroke> strokes = new LinkedHashMap<>();
+    private boolean locked;
 
     public synchronized LobbyDrawingMessage apply(LobbyDrawingRequest request) {
         if (request == null) return null;
         String type = safe(request.getType(), 20).toUpperCase();
         String sessionId = safe(request.getSessionId(), 80);
 
-        if ("ENTER".equals(type)) return LobbyDrawingMessage.snapshot(snapshot());
+        if ("ENTER".equals(type)) return LobbyDrawingMessage.snapshot(snapshot(), locked);
         if (sessionId.isBlank()) return null;
+        if ("LOCK".equals(type)) {
+            locked = true;
+            return LobbyDrawingMessage.lockState(true);
+        }
+        if ("UNLOCK".equals(type)) {
+            locked = false;
+            return LobbyDrawingMessage.lockState(false);
+        }
         if ("UNDO".equals(type)) {
             removeLastOwnedStroke(sessionId);
-            return LobbyDrawingMessage.snapshot(snapshot());
+            return LobbyDrawingMessage.snapshot(snapshot(), locked);
         }
         if ("CLEAR_MINE".equals(type)) {
             strokes.values().removeIf(stroke -> sessionId.equals(stroke.getSessionId())
                     && "PEN".equals(stroke.getTool()));
-            return LobbyDrawingMessage.snapshot(snapshot());
+            return LobbyDrawingMessage.snapshot(snapshot(), locked);
         }
         if (!"STROKE".equals(type)) return null;
+        if (locked) return null;
 
         String strokeId = safe(request.getStrokeId(), 100);
         String tool = safe(request.getTool(), 12).toUpperCase();

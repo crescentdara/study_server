@@ -69,6 +69,16 @@ class LobbyDrawingServiceTest {
         assertEquals("ERASER", remaining.getStrokes().get(0).getTool());
     }
 
+    @Test
+    void lockRejectsNewStrokesUntilAnyoneUnlocksIt() {
+        LobbyDrawingService service = new LobbyDrawingService();
+
+        assertTrue(service.apply(action("LOCK", "first-user")).isLocked());
+        assertNull(service.apply(stroke("locked-stroke", "second-user")));
+        assertFalse(service.apply(action("UNLOCK", "another-user")).isLocked());
+        assertNotNull(service.apply(stroke("unlocked-stroke", "second-user")));
+    }
+
     private static LobbyDrawingRequest action(String type, String sessionId) {
         LobbyDrawingRequest request = new LobbyDrawingRequest();
         request.setType(type);
