@@ -159,6 +159,7 @@ public class TetrisRecordService {
         result.put("tier", rank.tier());
         result.put("division", rank.division());
         result.put("rp", rank.rp());
+        result.put("rating", player == null ? INITIAL_RATING : player.rating);
         result.put("lastRankDelta", player == null ? 0 : player.lastRankDelta);
         result.put("lastRankChanged", player != null && player.lastRankChanged);
         result.put("lastRankBefore", player == null ? "UNRANKED" : player.lastRankBefore);

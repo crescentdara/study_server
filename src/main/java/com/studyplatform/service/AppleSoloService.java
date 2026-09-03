@@ -81,7 +81,6 @@ public class AppleSoloService {
         }
     }
 
-    /** 현재 상태 조회 (새로 고침 후 이어보기용) */
     public Map<String, Object> state(String instanceId) {
         SoloSession session = session(instanceId);
         synchronized (session) {
@@ -90,6 +89,7 @@ public class AppleSoloService {
         }
     }
 
+    /** 현재 상태 조회 (새로 고침 후 이어보기용) */
     private void settleIfDone(SoloSession session) {
         if (session.game.timeUp()) {
             session.state.setFinished(true);
