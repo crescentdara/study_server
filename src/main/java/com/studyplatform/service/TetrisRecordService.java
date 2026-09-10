@@ -29,7 +29,8 @@ import java.util.Set;
 @Primary
 public class TetrisRecordService {
     private static final int PLACEMENT_MATCHES = 5;
-    private static final int INITIAL_RATING = 800;
+    private static final int INITIAL_RATING = 400;
+    private static final int RANKING_VERSION = 2;
     /*
      * 점수 변동폭.
      *
@@ -42,11 +43,13 @@ public class TetrisRecordService {
     private static final int PLACEMENT_K_FACTOR = 120;
     private static final int RANKED_K_FACTOR = 72;
     private static final double LOSS_RP_MULTIPLIER = 1.15;
-    private static final int MASTER_RATING = 2800;
-    private static final int GRANDMASTER_RATING = 3200;
-    private static final int CHALLENGER_RATING = 3600;
+    private static final int DIVISION_RATING = 100;
+    private static final int TIER_RATING = DIVISION_RATING * 2;
+    private static final int MASTER_RATING = TIER_RATING * 7;
+    private static final int GRANDMASTER_RATING = MASTER_RATING + 400;
+    private static final int CHALLENGER_RATING = GRANDMASTER_RATING + 400;
     private static final String[] TIERS = {"IRON", "BRONZE", "SILVER", "GOLD", "PLATINUM", "EMERALD", "DIAMOND"};
-    private static final String[] DIVISIONS = {"IV", "III", "II", "I"};
+    private static final String[] DIVISIONS = {"II", "I"};
     private final ObjectMapper objectMapper;
     private final Path recordPath;
     private RecordStore store;
@@ -63,6 +66,7 @@ public class TetrisRecordService {
         this.objectMapper = objectMapper;
         this.recordPath = recordPath.toAbsolutePath().normalize();
         this.store = load();
+        migrateRatings();
     }
 
     public synchronized boolean recordCompletedMatch(String matchId, List<String> ranking) {
@@ -223,9 +227,9 @@ public class TetrisRecordService {
         if (rating >= CHALLENGER_RATING) return new Rank(true, "CHALLENGER", "", rating - MASTER_RATING);
         if (rating >= GRANDMASTER_RATING) return new Rank(true, "GRANDMASTER", "", rating - MASTER_RATING);
         if (rating >= MASTER_RATING) return new Rank(true, "MASTER", "", rating - MASTER_RATING);
-        int tierIndex = Math.min(TIERS.length - 1, rating / 400);
-        int withinTier = rating % 400;
-        return new Rank(true, TIERS[tierIndex], DIVISIONS[Math.min(3, withinTier / 100)], withinTier % 100);
+        int tierIndex = Math.min(TIERS.length - 1, rating / TIER_RATING);
+        int withinTier = rating % TIER_RATING;
+        return new Rank(true, TIERS[tierIndex], DIVISIONS[Math.min(1, withinTier / DIVISION_RATING)], withinTier % DIVISION_RATING);
     }
 
     private String rankLabel(PlayerRecord player) {
@@ -258,6 +262,17 @@ public class TetrisRecordService {
         }
     }
 
+    /**
+     * 4단계 티어(티어당 400점)에서 2단계 티어(티어당 200점)로 바뀌며,
+     * 기존 유저의 상대적인 티어 위치를 유지하기 위해 점수를 한 번만 절반으로 환산한다.
+     */
+    private void migrateRatings() {
+        if (store.rankingVersion >= RANKING_VERSION) return;
+        store.players.values().forEach(player -> player.rating = Math.max(0, player.rating / 2));
+        store.rankingVersion = RANKING_VERSION;
+        persist();
+    }
+
     private void persist() {
         try {
             Path parent = recordPath.getParent();
@@ -275,6 +290,7 @@ public class TetrisRecordService {
     }
 
     public static class RecordStore {
+        public int rankingVersion;
         public Set<String> completedMatchIds = new LinkedHashSet<>();
         public Map<String, PlayerRecord> players = new LinkedHashMap<>();
     }
