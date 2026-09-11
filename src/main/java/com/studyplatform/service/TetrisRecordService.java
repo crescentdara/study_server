@@ -35,20 +35,25 @@ public class TetrisRecordService {
      * 점수 변동폭.
      *
      * 한 판의 무게를 크게 잡아 한두 판으로도 티어가 눈에 띄게 움직이게 한다. 디비전이
-     * 100점이므로 동급 1:1에서 승 +36 / 패 -41 — 3승에 디비전이 오르고 3패에 떨어진다.
-     * 패배 배수를 1보다 크게 둬서 올라가는 것보다 떨어지는 게 조금 더 빠르다.
+     * 100점이므로 동급 1:1에서 승 +72 / 패 -41 — 재미 위주로 승리 보상을 크게 준다.
+     * 상대 점수 차이로 승리 보상이 지나치게 작아지지 않도록 최소 +25점을 보장하고,
+     * 패배 배수를 1보다 크게 둬서 강한 상대에게 진 경우보다 약한 상대에게 진 경우를 더 크게 반영한다.
      *
      * 배치(5판)는 K를 더 크게 줘서 첫 자리를 빠르게 잡는다.
      */
     private static final int PLACEMENT_K_FACTOR = 120;
     private static final int RANKED_K_FACTOR = 72;
+    private static final double WIN_RP_MULTIPLIER = 2.0;
+    private static final int MIN_WIN_RP = 25;
     private static final double LOSS_RP_MULTIPLIER = 1.15;
     private static final int DIVISION_RATING = 100;
     private static final int TIER_RATING = DIVISION_RATING * 2;
+    private static final int BUG_MAX_RATING = 50;
+    private static final int BEGGAR_MAX_RATING = 100;
     private static final int MASTER_RATING = TIER_RATING * 7;
     private static final int GRANDMASTER_RATING = MASTER_RATING + 400;
     private static final int CHALLENGER_RATING = GRANDMASTER_RATING + 400;
-    private static final String[] TIERS = {"IRON", "BRONZE", "SILVER", "GOLD", "PLATINUM", "EMERALD", "DIAMOND"};
+    private static final String[] TIERS = {"BRONZE", "SILVER", "GOLD", "PLATINUM", "EMERALD", "DIAMOND"};
     private static final String[] DIVISIONS = {"II", "I"};
     private final ObjectMapper objectMapper;
     private final Path recordPath;
@@ -209,7 +214,9 @@ public class TetrisRecordService {
         int opponents = ranking.size() - 1;
         int kFactor = player.placementGames < PLACEMENT_MATCHES ? PLACEMENT_K_FACTOR : RANKED_K_FACTOR;
         double rawDelta = kFactor * ((actualTotal / opponents) - (expectedTotal / opponents));
-        int delta = (int) Math.round(rawDelta < 0 ? rawDelta * LOSS_RP_MULTIPLIER : rawDelta);
+        int delta = rawDelta < 0
+                ? (int) Math.round(rawDelta * LOSS_RP_MULTIPLIER)
+                : Math.max(MIN_WIN_RP, (int) Math.round(rawDelta * WIN_RP_MULTIPLIER));
         player.rating = Math.max(0, ownRating + delta);
         player.placementGames = Math.min(PLACEMENT_MATCHES, player.placementGames + 1);
         player.lastRankDelta = delta;
@@ -227,7 +234,10 @@ public class TetrisRecordService {
         if (rating >= CHALLENGER_RATING) return new Rank(true, "CHALLENGER", "", rating - MASTER_RATING);
         if (rating >= GRANDMASTER_RATING) return new Rank(true, "GRANDMASTER", "", rating - MASTER_RATING);
         if (rating >= MASTER_RATING) return new Rank(true, "MASTER", "", rating - MASTER_RATING);
-        int tierIndex = Math.min(TIERS.length - 1, rating / TIER_RATING);
+        if (rating < BUG_MAX_RATING) return new Rank(true, "BUG", "", rating);
+        if (rating < BEGGAR_MAX_RATING) return new Rank(true, "BEGGAR", "", rating - BUG_MAX_RATING);
+        if (rating < TIER_RATING) return new Rank(true, "IRON", "", rating - BEGGAR_MAX_RATING);
+        int tierIndex = Math.min(TIERS.length - 1, (rating - TIER_RATING) / TIER_RATING);
         int withinTier = rating % TIER_RATING;
         return new Rank(true, TIERS[tierIndex], DIVISIONS[Math.min(1, withinTier / DIVISION_RATING)], withinTier % DIVISION_RATING);
     }
