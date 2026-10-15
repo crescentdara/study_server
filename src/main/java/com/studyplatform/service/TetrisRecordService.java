@@ -46,6 +46,8 @@ public class TetrisRecordService {
     private static final double WIN_RP_MULTIPLIER = 2.0;
     private static final int MIN_WIN_RP = 25;
     private static final double LOSS_RP_MULTIPLIER = 1.15;
+    // An expected loss must still have a meaningful ranked consequence.
+    private static final int MIN_LOSS_RP = 100;
     private static final int DIVISION_RATING = 100;
     private static final int TIER_RATING = DIVISION_RATING * 2;
     private static final int BUG_MAX_RATING = 50;
@@ -215,7 +217,7 @@ public class TetrisRecordService {
         int kFactor = player.placementGames < PLACEMENT_MATCHES ? PLACEMENT_K_FACTOR : RANKED_K_FACTOR;
         double rawDelta = kFactor * ((actualTotal / opponents) - (expectedTotal / opponents));
         int delta = rawDelta < 0
-                ? (int) Math.round(rawDelta * LOSS_RP_MULTIPLIER)
+                ? Math.min(-MIN_LOSS_RP, (int) Math.round(rawDelta * LOSS_RP_MULTIPLIER))
                 : Math.max(MIN_WIN_RP, (int) Math.round(rawDelta * WIN_RP_MULTIPLIER));
         player.rating = Math.max(0, ownRating + delta);
         player.placementGames = Math.min(PLACEMENT_MATCHES, player.placementGames + 1);

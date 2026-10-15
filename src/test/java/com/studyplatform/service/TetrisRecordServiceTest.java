@@ -76,7 +76,7 @@ class TetrisRecordServiceTest {
         placement.recordCompletedMatch("placement-equal", List.of("A", "B"));
         Map<String, Map<String, Object>> placementRecords = placement.recordsFor(List.of("A", "B"));
         // 배치는 K를 더 크게 줘서 첫 자리를 빠르게 잡는다
-        assertThat(placementRecords.get("A")).containsEntry("lastRankDelta", 60);
+        assertThat(placementRecords.get("A")).containsEntry("lastRankDelta", 120);
         assertThat(placementRecords.get("B")).containsEntry("lastRankDelta", -69);
 
         Path rankedPath = tempDir.resolve("loss-discount-ranked.json");
@@ -98,6 +98,31 @@ class TetrisRecordServiceTest {
         Map<String, Map<String, Object>> rankedRecords = ranked.recordsFor(List.of("A", "B"));
         assertThat(rankedRecords.get("A")).containsEntry("lastRankDelta", 36);
         assertThat(rankedRecords.get("B")).containsEntry("lastRankDelta", -41);
+    }
+
+    @Test
+    void lowerRatedPlayerStillLosesAtLeastOneHundredRpAgainstHigherRatedOpponent() throws Exception {
+        Path recordPath = tempDir.resolve("minimum-loss-records.json");
+        TetrisRecordService.RecordStore store = new TetrisRecordService.RecordStore();
+        store.rankingVersion = 2;
+        TetrisRecordService.PlayerRecord higher = new TetrisRecordService.PlayerRecord();
+        higher.nickname = "Higher";
+        higher.rating = 1_000;
+        higher.placementGames = 5;
+        TetrisRecordService.PlayerRecord lower = new TetrisRecordService.PlayerRecord();
+        lower.nickname = "Lower";
+        lower.rating = 400;
+        lower.placementGames = 5;
+        store.players.put("higher", higher);
+        store.players.put("lower", lower);
+        new ObjectMapper().writeValue(recordPath.toFile(), store);
+
+        TetrisRecordService service = new TetrisRecordService(new ObjectMapper(), recordPath);
+        service.recordCompletedMatch("higher-wins", List.of("Higher", "Lower"));
+
+        assertThat(service.recordsFor(List.of("Lower")).get("Lower"))
+                .containsEntry("lastRankDelta", -100)
+                .containsEntry("rating", 300);
     }
 
     @Test
