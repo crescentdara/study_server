@@ -34,11 +34,11 @@ class TetrisMatchLifecycleTest {
     void survivalRoomKeepsChosenCapacity() {
         RoomService rooms = new RoomService();
 
-        Room solo = rooms.createRoom("solo", StudyType.TETRIS, "Host", "host", 1, 0, 20, "SURVIVAL");
-        assertThat(solo.getMode()).isEqualTo("SURVIVAL");
+        Room solo = rooms.createRoom("solo", StudyType.TETRIS, "Host", "host", 1, 0, 20, "SPRINT");
+        assertThat(solo.getMode()).isEqualTo("SPRINT");
         assertThat(solo.getMaxPlayers()).isEqualTo(1);
-        assertThat(RoomResponse.from(solo).getMode()).isEqualTo("SURVIVAL");
-        assertThat(RoomService.isSurvival(solo)).isTrue();
+        assertThat(RoomResponse.from(solo).getMode()).isEqualTo("SPRINT");
+        assertThat(RoomService.isSprint(solo)).isTrue();
         assertThatThrownBy(() -> rooms.joinRoom(solo.getRoomId(), "Guest", "guest"))
                 .hasMessage("Room is full.");
         rooms.startGame(solo);
@@ -46,10 +46,8 @@ class TetrisMatchLifecycleTest {
         assertThat(((TetrisGame) solo.getGameData()).getNumPlayers()).isEqualTo(1);
 
         // 여럿이 겨루는 서바이벌 — 입장하면서 정원이 3으로 늘어나지 않아야 한다
-        Room duo = rooms.createRoom("duo", StudyType.TETRIS, "Host", "duo-host", 2, 0, 20, "SURVIVAL");
-        assertThat(duo.getMaxPlayers()).isEqualTo(2);
-        rooms.joinRoom(duo.getRoomId(), "Guest", "duo-guest");
-        assertThat(duo.getMaxPlayers()).isEqualTo(2);
+        Room duo = rooms.createRoom("duo", StudyType.TETRIS, "Host", "duo-host", 2, 0, 20, "SPRINT");
+        assertThat(duo.getMaxPlayers()).isEqualTo(1);
         assertThatThrownBy(() -> rooms.joinRoom(duo.getRoomId(), "Third", "duo-third"))
                 .hasMessage("Room is full.");
     }

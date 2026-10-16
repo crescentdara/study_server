@@ -52,10 +52,10 @@ public class RoomService {
                 : roomName.trim();
         Room room = new Room(safeRoomName, studyType);
         // 서바이벌도 여러 명이 같은 조건에서 누가 오래 버티나 겨룰 수 있다 (1~3명)
-        boolean survival = studyType == StudyType.TETRIS && "SURVIVAL".equalsIgnoreCase(mode == null ? "" : mode.trim());
-        room.setMode(survival ? "SURVIVAL" : "");
+        boolean sprint = studyType == StudyType.TETRIS && "SPRINT".equalsIgnoreCase(mode == null ? "" : mode.trim());
+        room.setMode(sprint ? "SPRINT" : "");
         // TETRIS=최대 3명(2명부터 시작), INCIDENT_AVOID/BREAKOUT=3명 고정, OMOK=2명 고정, RUSH_HOUR=1~3명, OLDMAID=2~7명, 나머지=2~6명
-        room.setMaxPlayers(survival ? Math.max(1, Math.min(3, maxPlayers))
+        room.setMaxPlayers(sprint ? 1
                 : studyType == StudyType.TETRIS ? 3
                 : studyType == StudyType.INCIDENT_AVOID || studyType == StudyType.BREAKOUT ? 3
                 : studyType == StudyType.OMOK      ? 2
@@ -194,9 +194,9 @@ public class RoomService {
     }
 
     private void normalizeRoomConfig(Room room) {
-        if (room.getStudyType() == StudyType.TETRIS && isSurvival(room)) {
+        if (room.getStudyType() == StudyType.TETRIS && isSprint(room)) {
             // 서바이벌은 방을 만들 때 고른 정원(1~3)을 그대로 지킨다
-            room.setMaxPlayers(Math.max(1, Math.min(3, room.getMaxPlayers())));
+            room.setMaxPlayers(1);
             room.setBoardSize(20);
         } else if (room.getStudyType() == StudyType.TETRIS) {
             room.setMaxPlayers(3);
@@ -214,10 +214,10 @@ public class RoomService {
     }
 
     /** 테트리스 서바이벌 방인지 */
-    public static boolean isSurvival(Room room) {
+    public static boolean isSprint(Room room) {
         return room != null
                 && room.getStudyType() == StudyType.TETRIS
-                && "SURVIVAL".equalsIgnoreCase(room.getMode() == null ? "" : room.getMode().trim());
+                && "SPRINT".equalsIgnoreCase(room.getMode() == null ? "" : room.getMode().trim());
     }
 
     /**

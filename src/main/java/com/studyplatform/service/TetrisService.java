@@ -8,7 +8,7 @@ import com.studyplatform.model.StudyStatus;
 import com.studyplatform.model.StudyType;
 import com.studyplatform.model.tetris.TetrisGame;
 import com.studyplatform.model.tetris.TetrisPlayerState;
-import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -33,16 +33,24 @@ public class TetrisService {
     private static final int SURVIVAL_TIME_WEIGHT = 100;
     private static final int SURVIVAL_LINE_WEIGHT = 20;
     private static final int SURVIVAL_SCORE_DIVISOR = 10;
+    private static final int SPRINT_TARGET_LINES = 40;
 
     private final TetrisRecordService recordService;
-    private final TetrisRecordService survivalRecordService;
+    private final TetrisSprintRecordService sprintRecordService;
 
+    @Autowired
     public TetrisService(
             TetrisRecordService recordService,
-            @Qualifier("tetrisSurvivalRecordService") TetrisRecordService survivalRecordService
+            TetrisSprintRecordService sprintRecordService
     ) {
         this.recordService = recordService;
-        this.survivalRecordService = survivalRecordService;
+        this.sprintRecordService = sprintRecordService;
+    }
+
+    /** Compatibility constructor used by legacy service tests. */
+    TetrisService(TetrisRecordService recordService, TetrisRecordService ignoredLegacySurvivalRecordService) {
+        this.recordService = recordService;
+        this.sprintRecordService = null;
     }
 
     public StudyStateResponse processMove(Room room, Player player, StudyMoveRequest request) {
@@ -63,10 +71,10 @@ public class TetrisService {
             distract(game, player.getPlayerIndex(), request.getPayload());
             return buildInitialState(room);
         }
-        boolean survival = RoomService.isSurvival(room);
-        syncState(game, player.getPlayerIndex(), request.getPayload(), survival);
-        if (survival) {
-            settleSurvival(room, game);
+        boolean sprint = RoomService.isSprint(room);
+        syncState(game, player.getPlayerIndex(), request.getPayload(), sprint);
+        if (sprint) {
+            settleSprint(room, game, player.getPlayerIndex());
         } else {
             updateWinner(room, game, player.getPlayerIndex());
         }
@@ -79,15 +87,15 @@ public class TetrisService {
             game = new TetrisGame(room.getPlayers().size());
             room.setGameData(game);
         }
-        boolean survival = RoomService.isSurvival(room);
+        boolean sprint = RoomService.isSprint(room);
         Map<String, Object> gameData = new HashMap<>();
         // survival이면 클라이언트가 '시간이 되면 쓰레기 줄이 올라오는' 규칙으로 돌린다
-        gameData.put("mode", survival ? "survival" : "local");
+        gameData.put("mode", sprint ? "sprint" : "local");
         gameData.put("rows", game.getRows());
         gameData.put("cols", game.getCols());
         gameData.put("numPlayers", game.getNumPlayers());
         // 서바이벌은 기록을 남기지 않으므로 랭크전이 아니다
-        gameData.put("rankedMatch", !survival && game.getNumPlayers() >= 2);
+        gameData.put("rankedMatch", !sprint && game.getNumPlayers() >= 2);
         gameData.put("instanceId", game.getInstanceId());
         gameData.put("playerStates", game.getPlayerStates());
         gameData.put("garbageQueues", game.getGarbageQueues());
@@ -100,15 +108,14 @@ public class TetrisService {
         gameData.put("abortReason", game.getAbortReason());
         gameData.put("previousAbortReason", game.getPreviousAbortReason());
         gameData.put("finalRanking", game.getFinalRanking());
-        if (survival) {
-            // 모두가 같은 시각·같은 구멍 순서를 쓰도록 서버 값을 그대로 내려보낸다
-            gameData.put("survivalElapsedMs", game.survivalElapsedMs());
-            gameData.put("garbageHoles", game.getGarbageHoles());
-            gameData.put("survivalResults", game.getSurvivalResults());
+        if (sprint) {
+            gameData.put("sprintTargetLines", SPRINT_TARGET_LINES);
+            gameData.put("sprintElapsedMs", game.elapsedMs());
+            gameData.put("sprintResult", game.getSprintResult());
         }
 
         String[] names = room.getPlayers().stream().map(Player::getNickname).toArray(String[]::new);
-        gameData.put("records", (survival ? survivalRecordService : recordService).recordsFor(List.of(names)));
+        gameData.put("records", recordService.recordsFor(List.of(names)));
         return StudyStateResponse.builder()
                 .roomId(room.getRoomId())
                 .studyType(StudyType.TETRIS)
@@ -126,7 +133,7 @@ public class TetrisService {
     }
 
     @SuppressWarnings("unchecked")
-    private void syncState(TetrisGame game, int playerIndex, Object payload, boolean survival) {
+    private void syncState(TetrisGame game, int playerIndex, Object payload, boolean sprint) {
         if (!(payload instanceof Map<?, ?> map)) return;
         Object requestedInstance = map.get("instanceId");
         if (requestedInstance instanceof String instanceId
@@ -156,9 +163,7 @@ public class TetrisService {
         state.setGameOver(requestedGameOver);
         state.setUpdatedAt(System.currentTimeMillis());
 
-        if (survival) {
-            // 순수 생존 경쟁 — 서로 공격하지 않는다. 쓰레기는 시간이 되면 모두에게 올라온다.
-            stampSurvivalResult(game, playerIndex, state);
+        if (sprint) {
             return;
         }
         ackAttacks(game, playerIndex, map);
@@ -171,22 +176,37 @@ public class TetrisService {
      * 생존 시간을 클라이언트가 보고하는 값이 아니라 '서버가 탈락을 확인한 시점'으로
      * 계산하므로 시간을 부풀릴 수 없다. 한 번 찍힌 결과는 덮어쓰지 않는다.
      */
-    private void stampSurvivalResult(TetrisGame game, int playerIndex, TetrisPlayerState state) {
-        if (!state.isGameOver() || game.getSurvivalResults().containsKey(playerIndex)) return;
-        game.getSurvivalResults().put(playerIndex, survivalResult(game.survivalElapsedMs(), state));
+    private void settleSprint(Room room, TetrisGame game, int playerIndex) {
+        if (room.getStatus() == StudyStatus.FINISHED || game.isAborted()) return;
+        TetrisPlayerState state = game.getPlayerStates().get(playerIndex);
+        if (state == null || state.getLines() < SPRINT_TARGET_LINES) return;
+
+        long elapsedMs = game.elapsedMs();
+        String nickname = room.getPlayers().stream()
+                .filter(player -> player.getPlayerIndex() == playerIndex)
+                .findFirst()
+                .map(Player::getNickname)
+                .orElse("");
+        Map<String, Object> result = sprintRecordService.record(nickname, elapsedMs);
+        if (result.isEmpty()) return;
+        result.put("elapsedMs", elapsedMs);
+        result.put("lines", state.getLines());
+        game.setSprintResult(result);
+        game.setWinner(playerIndex);
+        game.getFinalRanking().clear();
+        game.getFinalRanking().add(playerIndex);
+        game.setRecordSaved(true);
+        room.setStatus(StudyStatus.FINISHED);
     }
 
-    private Map<String, Object> survivalResult(long survivedMs, TetrisPlayerState state) {
+    // Kept only to deserialize obsolete in-memory games created before sprint replaced survival.
+    private Map<String, Object> survivalResult(long elapsedMs, TetrisPlayerState state) {
         Map<String, Object> result = new LinkedHashMap<>();
-        long seconds = survivedMs / 1000;
-        long total = seconds * SURVIVAL_TIME_WEIGHT
-                + (long) state.getLines() * SURVIVAL_LINE_WEIGHT
-                + state.getScore() / SURVIVAL_SCORE_DIVISOR;
-        result.put("survivedMs", survivedMs);
-        result.put("survivedSeconds", seconds);
+        result.put("survivedMs", elapsedMs);
+        result.put("survivedSeconds", elapsedMs / 1000);
         result.put("score", state.getScore());
         result.put("lines", state.getLines());
-        result.put("total", total);
+        result.put("total", elapsedMs);
         return result;
     }
 
@@ -240,7 +260,7 @@ public class TetrisService {
                         .orElse(""))
                 .toList();
         if (ranking.stream().anyMatch(String::isBlank)) return;
-        survivalRecordService.recordCompletedMatch(game.getInstanceId(), ranking);
+        recordService.recordCompletedMatch(game.getInstanceId(), ranking);
         game.setRecordSaved(true);
     }
 

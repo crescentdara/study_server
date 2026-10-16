@@ -2,6 +2,7 @@ package com.studyplatform.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.studyplatform.service.TetrisRecordService;
+import com.studyplatform.service.TetrisSprintRecordService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -17,11 +18,11 @@ import java.nio.file.Path;
 @Configuration
 public class TetrisRecordConfig {
 
-    @Bean("tetrisSurvivalRecordService")
-    public TetrisRecordService tetrisSurvivalRecordService(
+    @Bean
+    public TetrisSprintRecordService tetrisSprintRecordService(
             ObjectMapper objectMapper,
-            @Value("${tetris.survival.records.path:data/tetris-survival-records.json}") String recordPath
+            @Value("${tetris.sprint.records.path:data/tetris-sprint-records.json}") String recordPath
     ) {
-        return new TetrisRecordService(objectMapper, Path.of(recordPath));
+        return new TetrisSprintRecordService(objectMapper, Path.of(recordPath));
     }
 }

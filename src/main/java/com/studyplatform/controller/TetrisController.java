@@ -1,7 +1,7 @@
 package com.studyplatform.controller;
 
 import com.studyplatform.service.TetrisRecordService;
-import org.springframework.beans.factory.annotation.Qualifier;
+import com.studyplatform.service.TetrisSprintRecordService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -20,14 +20,14 @@ import java.util.Map;
 @RequestMapping("/api/tetris")
 public class TetrisController {
     private final TetrisRecordService recordService;
-    private final TetrisRecordService survivalRecordService;
+    private final TetrisSprintRecordService sprintRecordService;
 
     public TetrisController(
             TetrisRecordService recordService,
-            @Qualifier("tetrisSurvivalRecordService") TetrisRecordService survivalRecordService
+            TetrisSprintRecordService sprintRecordService
     ) {
         this.recordService = recordService;
-        this.survivalRecordService = survivalRecordService;
+        this.sprintRecordService = sprintRecordService;
     }
 
     /** 대전 티어·레이팅 순위 — 전체 공유 */
@@ -37,8 +37,8 @@ public class TetrisController {
     }
 
     /** 서바이벌 티어·레이팅 순위 — 대전과 따로 매긴다 */
-    @GetMapping("/survival/leaderboard")
-    public List<Map<String, Object>> survivalLeaderboard(@RequestParam(defaultValue = "10") int limit) {
-        return survivalRecordService.leaderboard(limit);
+    @GetMapping("/sprint/leaderboard")
+    public List<Map<String, Object>> sprintLeaderboard(@RequestParam(defaultValue = "10") int limit) {
+        return sprintRecordService.leaderboard(limit);
     }
 }

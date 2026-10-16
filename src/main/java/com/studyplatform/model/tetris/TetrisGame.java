@@ -33,6 +33,7 @@ public class TetrisGame {
     private String abortReason = "";
     private String previousAbortReason = "";
     private boolean recordSaved = false;
+    private Map<String, Object> sprintResult = new ConcurrentHashMap<>();
 
     /* ── 서바이벌 전용 ──────────────────────────────────────────────────────
      * 여러 명이 같은 조건에서 버티는 경기가 되려면 '언제 몇 번째 줄이 올라오는지'와
@@ -40,7 +41,8 @@ public class TetrisGame {
      * 서버가 들고 있고, 클라이언트는 그걸 그대로 따라 그린다.
      * ─────────────────────────────────────────────────────────────────── */
     /** 서바이벌 기준 시계의 원점 */
-    private final long startedAt = System.currentTimeMillis();
+    // Match the client-side three-second ready countdown; sprint time starts with the first piece.
+    private final long startedAt = System.currentTimeMillis() + 3_000;
     /** 일시정지 중이면 그 시각, 진행 중이면 0 */
     private long pausedAt = 0;
     /** 지금까지 멈춰 있던 시간 합계 */
@@ -87,6 +89,11 @@ public class TetrisGame {
         long now = System.currentTimeMillis();
         long paused = pausedTotalMs + (pausedAt > 0 ? now - pausedAt : 0);
         return Math.max(0, now - startedAt - paused);
+    }
+
+    /** Elapsed active time used by the 40-line sprint timer. */
+    public long elapsedMs() {
+        return survivalElapsedMs();
     }
 
     /** 일시정지 상태를 바꾸면서 멈춘 시간을 누적한다 */
