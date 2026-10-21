@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * 서바이벌 랭크도 같은 계산을 쓰지만 장부는 따로 둔다(TetrisRecordConfig에서 두 번째
@@ -34,20 +35,13 @@ public class TetrisRecordService {
     /*
      * 점수 변동폭.
      *
-     * 한 판의 무게를 크게 잡아 한두 판으로도 티어가 눈에 띄게 움직이게 한다. 디비전이
-     * 100점이므로 동급 1:1에서 승 +72 / 패 -41 — 재미 위주로 승리 보상을 크게 준다.
-     * 상대 점수 차이로 승리 보상이 지나치게 작아지지 않도록 최소 +25점을 보장하고,
-     * 패배 배수를 1보다 크게 둬서 강한 상대에게 진 경우보다 약한 상대에게 진 경우를 더 크게 반영한다.
-     *
-     * 배치(5판)는 K를 더 크게 줘서 첫 자리를 빠르게 잡는다.
+     * 상대 점수나 실력 차이와 상관없이 승리하면 WIN 범위, 패배하면 LOSS 범위에서
+     * 무작위로 뽑은 값만큼 오르고 내린다. 두 값 모두 양 끝을 포함한다.
      */
-    private static final int PLACEMENT_K_FACTOR = 120;
-    private static final int RANKED_K_FACTOR = 72;
-    private static final double WIN_RP_MULTIPLIER = 2.0;
-    private static final int MIN_WIN_RP = 25;
-    private static final double LOSS_RP_MULTIPLIER = 1.15;
-    // An expected loss must still have a meaningful ranked consequence.
-    private static final int MIN_LOSS_RP = 100;
+    private static final int WIN_RP_MIN = 1;
+    private static final int WIN_RP_MAX = 200;
+    private static final int LOSS_RP_MIN = 1;
+    private static final int LOSS_RP_MAX = 200;
     private static final int DIVISION_RATING = 100;
     private static final int TIER_RATING = DIVISION_RATING * 2;
     private static final int BUG_MAX_RATING = 50;
@@ -204,21 +198,11 @@ public class TetrisRecordService {
             String matchId,
             String rankBefore
     ) {
-        double actualTotal = 0;
-        double expectedTotal = 0;
         int ownRating = ratingsBefore.getOrDefault(key(player.nickname), INITIAL_RATING);
-        for (int opponentPosition = 0; opponentPosition < ranking.size(); opponentPosition += 1) {
-            if (opponentPosition == playerPosition) continue;
-            int opponentRating = ratingsBefore.getOrDefault(key(ranking.get(opponentPosition)), INITIAL_RATING);
-            actualTotal += playerPosition < opponentPosition ? 1.0 : 0.0;
-            expectedTotal += 1.0 / (1.0 + Math.pow(10.0, (opponentRating - ownRating) / 400.0));
-        }
-        int opponents = ranking.size() - 1;
-        int kFactor = player.placementGames < PLACEMENT_MATCHES ? PLACEMENT_K_FACTOR : RANKED_K_FACTOR;
-        double rawDelta = kFactor * ((actualTotal / opponents) - (expectedTotal / opponents));
-        int delta = rawDelta < 0
-                ? Math.min(-MIN_LOSS_RP, (int) Math.round(rawDelta * LOSS_RP_MULTIPLIER))
-                : Math.max(MIN_WIN_RP, (int) Math.round(rawDelta * WIN_RP_MULTIPLIER));
+        boolean won = playerPosition == 0;
+        int delta = won
+                ? ThreadLocalRandom.current().nextInt(WIN_RP_MIN, WIN_RP_MAX + 1)
+                : -ThreadLocalRandom.current().nextInt(LOSS_RP_MIN, LOSS_RP_MAX + 1);
         player.rating = Math.max(0, ownRating + delta);
         player.placementGames = Math.min(PLACEMENT_MATCHES, player.placementGames + 1);
         player.lastRankDelta = delta;
