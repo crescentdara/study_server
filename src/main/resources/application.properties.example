@@ -16,3 +16,5 @@ server.servlet.session.timeout=30m
 
 # JSON 직렬화: null 값 제외
 spring.jackson.default-property-inclusion=non_null
+
+# Set LOBBY_PASSWORD as a server environment variable before starting.

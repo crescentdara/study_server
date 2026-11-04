@@ -50,7 +50,7 @@ public class CorsConfig {
         // addAllowedOrigin("*") 대신 addAllowedOriginPattern("*")을 쓰는 이유:
         // setAllowCredentials(true)와 "*"를 함께 쓰면 보안 정책 충돌이 발생하기 때문에
         // 와일드카드 패턴 방식(OriginPattern)을 사용해야 합니다.
-        config.addAllowedOriginPattern("*");
+        // Same-origin requests need no CORS allowance. Configure trusted origins explicitly if needed.
 
         // Content-Type, Authorization 등 클라이언트가 보내는 모든 HTTP 헤더 허용
         config.addAllowedHeader("*");
