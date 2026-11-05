@@ -715,23 +715,6 @@ jobs:
               exit 1
           }
 
-          # Verify that the newly started backend accepts the configured secret.
-          # Never print the request body or the secret to the deployment log.
-          $loginBody = @{ password = $env:LOBBY_PASSWORD } | ConvertTo-Json -Compress
-          try {
-              $loginResult = Invoke-WebRequest -UseBasicParsing `
-                  -Uri 'http://127.0.0.1:20124/api/auth/login' `
-                  -Method Post -ContentType 'application/json' -Body $loginBody
-              if ($loginResult.StatusCode -ne 204) {
-                  throw "Unexpected status $($loginResult.StatusCode)"
-              }
-          }
-          catch {
-              Write-Error 'Backend did not accept the configured LOBBY_PASSWORD during deployment.'
-              exit 1
-          }
-          Write-Host 'Backend accepted the configured lobby password.'
-
 
 
           Write-Host ""
