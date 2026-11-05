@@ -578,7 +578,7 @@ jobs:
           # javaw 프로세스를 Job 종료 후
           # 같이 정리하지 않도록 처리
           # --------------------------------------------------
-          $env:RUNNER_TRACKING_ID = ""
+          $env:RUNNER_TRACKING_ID = "backend-service"
 
 
 
@@ -644,10 +644,6 @@ jobs:
       # 최대 약 60초 기다림
       #
       # ======================================================
-      - name: Verify backend
-        shell: powershell
-        run: |
-
           $backendPort = 20124
 
 
@@ -669,6 +665,11 @@ jobs:
           # Spring Boot 기동 대기
           # --------------------------------------------------
           for ($i = 1; $i -le 30; $i++) {
+
+              if (!(Get-Process -Id $process.Id -ErrorAction SilentlyContinue)) {
+                  Write-Host "Backend process exited during startup."
+                  break
+              }
 
               $connection = Get-NetTCPConnection `
                   -LocalPort $backendPort `
@@ -713,6 +714,9 @@ jobs:
           if (!$success) {
 
               Write-Host ""
+              Write-Host "Backend startup logs:"
+              Get-Content (Join-Path $deployPath "backend-stdout.log") -Tail 100 -ErrorAction SilentlyContinue
+              Get-Content (Join-Path $deployPath "backend-stderr.log") -Tail 100 -ErrorAction SilentlyContinue
               Write-Error "Backend port $backendPort is not listening."
 
 
