@@ -7,6 +7,8 @@ import org.springframework.http.server.ServerHttpResponse;
 import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.server.HandshakeInterceptor;
 import java.util.Map;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
@@ -82,7 +84,14 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                     public boolean beforeHandshake(ServerHttpRequest request, ServerHttpResponse response,
                             WebSocketHandler handler, Map<String, Object> attributes) {
                         if (request.getRemoteAddress() != null && request.getRemoteAddress().getAddress() != null) {
-                            attributes.put("clientIp", request.getRemoteAddress().getAddress().getHostAddress());
+                            InetAddress remote = request.getRemoteAddress().getAddress();
+                            String address = remote.getHostAddress();
+                            String forwarded = request.getHeaders().getFirst("X-Real-IP");
+                            if (remote.isLoopbackAddress() && forwarded != null && forwarded.matches("[0-9a-fA-F:.]+")) {
+                                try { address = InetAddress.getByName(forwarded).getHostAddress(); }
+                                catch (UnknownHostException ignored) { /* Use the peer address. */ }
+                            }
+                            attributes.put("clientIp", address);
                         }
                         return true;
                     }
