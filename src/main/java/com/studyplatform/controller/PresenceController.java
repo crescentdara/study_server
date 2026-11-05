@@ -19,12 +19,14 @@ import java.util.Map;
 public class PresenceController {
     private static final long TIMEOUT_MS = 180_000;
     private final Map<String, Connection> connections = new HashMap<>();
+    private final Map<String, Long> recentlySeen = new HashMap<>();
     private final SimpMessagingTemplate messaging;
 
     public PresenceController(SimpMessagingTemplate messaging) { this.messaging = messaging; }
 
-    private record Connection(String ip, String nickname, long lastSeen) {}
+    private record Connection(String ip, String nickname, String browserId, String notificationId, long lastSeen) {}
     public record Visitor(String ip, String nickname, int connections) {}
+    public record Arrival(String nickname) {}
     private record VisitorKey(String ip, String nickname) {}
 
     @MessageMapping("/presence/register")
@@ -38,7 +40,23 @@ public class PresenceController {
         if (nickname == null) nickname = "";
         nickname = nickname.trim();
         if (nickname.length() > 80) nickname = nickname.substring(0, 80);
-        Connection previous = connections.put(headers.getSessionId(), new Connection(address, nickname, System.currentTimeMillis()));
+        String browserId = payload == null ? "" : payload.getOrDefault("browserId", "");
+        String notificationId = payload == null ? "" : payload.getOrDefault("notificationId", "");
+        if (browserId == null || !browserId.matches("[a-zA-Z0-9-]{1,64}")) browserId = "";
+        if (notificationId == null || !notificationId.matches("[a-zA-Z0-9-]{1,64}")) notificationId = "";
+        long now = System.currentTimeMillis();
+        recentlySeen.entrySet().removeIf(entry -> entry.getValue() < now - TIMEOUT_MS);
+        Connection previous = connections.get(headers.getSessionId());
+        boolean newBrowser = !browserId.isEmpty() && previous == null && !recentlySeen.containsKey(browserId);
+        if (newBrowser) {
+            Arrival arrival = new Arrival(nickname.isEmpty() ? "새 사용자" : nickname);
+            connections.values().stream()
+                    .filter(existing -> existing.lastSeen() >= now - TIMEOUT_MS && !existing.notificationId().isEmpty())
+                    .map(Connection::notificationId).distinct()
+                    .forEach(id -> messaging.convertAndSend("/topic/presence/arrivals/" + id, arrival));
+        }
+        if (!browserId.isEmpty()) recentlySeen.put(browserId, now);
+        connections.put(headers.getSessionId(), new Connection(address, nickname, browserId, notificationId, now));
         if (previous == null || !previous.ip().equals(address) || !previous.nickname().equals(nickname)) broadcast();
     }
 
