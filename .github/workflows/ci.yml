@@ -590,7 +590,7 @@ jobs:
           # javaw 프로세스를 Job 종료 후
           # 같이 정리하지 않도록 처리
           # --------------------------------------------------
-          $env:RUNNER_TRACKING_ID = "backend-service"
+          $env:RUNNER_TRACKING_ID = ""
 
 
 
@@ -598,11 +598,9 @@ jobs:
           # javaw.exe 백그라운드 실행
           # --------------------------------------------------
           $process = Start-Process `
-              -FilePath "java.exe" `
+              -FilePath "javaw.exe" `
               -ArgumentList "-jar `"$jarPath`"" `
               -WorkingDirectory $deployPath `
-              -RedirectStandardOutput (Join-Path $deployPath "backend-stdout.log") `
-              -RedirectStandardError (Join-Path $deployPath "backend-stderr.log") `
               -WindowStyle Hidden `
               -PassThru
 
@@ -629,9 +627,6 @@ jobs:
 
           if (!$running) {
 
-              Write-Host "Backend startup logs:"
-              Get-Content (Join-Path $deployPath "backend-stdout.log") -Tail 80 -ErrorAction SilentlyContinue
-              Get-Content (Join-Path $deployPath "backend-stderr.log") -Tail 80 -ErrorAction SilentlyContinue
               Write-Error "Backend process terminated during startup."
 
               exit 1
@@ -714,9 +709,6 @@ jobs:
           if (!$success) {
 
               Write-Host ""
-              Write-Host "Backend startup logs:"
-              Get-Content (Join-Path $deployPath "backend-stdout.log") -Tail 100 -ErrorAction SilentlyContinue
-              Get-Content (Join-Path $deployPath "backend-stderr.log") -Tail 100 -ErrorAction SilentlyContinue
               Write-Error "Backend port $backendPort is not listening."
 
 
