@@ -1,6 +1,7 @@
 package com.studyplatform.config;
 
 import org.springframework.context.annotation.Configuration;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.server.ServerHttpRequest;
 import org.springframework.http.server.ServerHttpResponse;
 import org.springframework.web.socket.WebSocketHandler;
@@ -40,6 +41,9 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 @EnableWebSocketMessageBroker  // STOMP 기반 메시지 브로커 활성화
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
+    @Value("${lobby.allowed-origins:http://61.82.210.118:20124}")
+    private String[] allowedOrigins;
+
     /**
      * 메시지 브로커 설정
      *
@@ -72,6 +76,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/ws")            // 연결 URL: http://localhost:8080/ws
+                .setAllowedOrigins(allowedOrigins)
                 .addInterceptors(new HandshakeInterceptor() {
                     @Override
                     public boolean beforeHandshake(ServerHttpRequest request, ServerHttpResponse response,

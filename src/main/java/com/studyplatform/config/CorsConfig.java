@@ -1,6 +1,7 @@
 package com.studyplatform.config;
 
 import org.springframework.context.annotation.Bean;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -29,6 +30,9 @@ import org.springframework.web.filter.CorsFilter;
 @Configuration
 public class CorsConfig {
 
+    @Value("${lobby.allowed-origins:http://61.82.210.118:20124}")
+    private String[] allowedOrigins;
+
     /**
      * @Bean: 이 메서드의 반환값을 Spring 빈으로 등록합니다.
      * Spring Boot가 자동으로 이 필터를 HTTP 요청 처리 체인에 추가합니다.
@@ -50,7 +54,9 @@ public class CorsConfig {
         // addAllowedOrigin("*") 대신 addAllowedOriginPattern("*")을 쓰는 이유:
         // setAllowCredentials(true)와 "*"를 함께 쓰면 보안 정책 충돌이 발생하기 때문에
         // 와일드카드 패턴 방식(OriginPattern)을 사용해야 합니다.
-        // Same-origin requests need no CORS allowance. Configure trusted origins explicitly if needed.
+        for (String origin : allowedOrigins) {
+            config.addAllowedOrigin(origin.trim());
+        }
 
         // Content-Type, Authorization 등 클라이언트가 보내는 모든 HTTP 헤더 허용
         config.addAllowedHeader("*");

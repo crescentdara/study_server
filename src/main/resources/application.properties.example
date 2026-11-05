@@ -18,3 +18,5 @@ server.servlet.session.timeout=30m
 spring.jackson.default-property-inclusion=non_null
 
 # Set LOBBY_PASSWORD as a server environment variable before starting.
+# Override the comma-separated trusted frontend origins if the public address changes.
+# lobby.allowed-origins=http://61.82.210.118:20124
