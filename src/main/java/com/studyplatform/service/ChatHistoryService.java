@@ -14,17 +14,37 @@ public class ChatHistoryService {
     private static final int MAX_HISTORY = 100;
     private final Deque<ChatMessage> lobby = new ArrayDeque<>();
     private final AtomicLong idSeq = new AtomicLong();
+    private long clearedThrough;
+    public record LobbyState(List<ChatMessage> messages, long clearedThrough) {}
 
     public long nextId() {
         return idSeq.incrementAndGet();
     }
 
-    public void addLobby(ChatMessage message) {
-        add(lobby, message);
+    public boolean addLobby(ChatMessage message) {
+        synchronized (lobby) {
+            if (message.getId() <= clearedThrough) return false;
+            add(lobby, message);
+            return true;
+        }
+    }
+
+    public long clearLobby() {
+        synchronized (lobby) {
+            clearedThrough = idSeq.get();
+            lobby.clear();
+            return clearedThrough;
+        }
     }
 
     public List<ChatMessage> lobbyHistory() {
         return snapshot(lobby);
+    }
+
+    public LobbyState lobbyState() {
+        synchronized (lobby) {
+            return new LobbyState(new ArrayList<>(lobby), clearedThrough);
+        }
     }
 
     public ChatMessage findLobbyById(long id) {

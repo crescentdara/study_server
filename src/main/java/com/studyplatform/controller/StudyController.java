@@ -32,6 +32,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 import java.util.List;
@@ -300,7 +301,7 @@ public class StudyController {
         String emoji    = request.getEmoji() != null ? request.getEmoji() : "";
         ChatMessage chatMessage = buildChatMessage(nickname, emoji, request);
         if (chatMessage == null) return;
-        chatHistoryService.addLobby(chatMessage);
+        if (!chatHistoryService.addLobby(chatMessage)) return;
         msg.convertAndSend("/topic/lobby/chat", chatMessage);
     }
 
@@ -309,6 +310,20 @@ public class StudyController {
     @ResponseBody
     public List<ChatMessage> lobbyChatHistory() {
         return chatHistoryService.lobbyHistory();
+    }
+
+    @GetMapping("/api/chat/lobby/history/state")
+    @ResponseBody
+    public ChatHistoryService.LobbyState lobbyChatHistoryState() {
+        return chatHistoryService.lobbyState();
+    }
+
+    @DeleteMapping("/api/chat/lobby/history")
+    @ResponseBody
+    public Map<String, Long> clearLobbyChatHistory() {
+        Map<String, Long> event = Map.of("clearedThrough", chatHistoryService.clearLobby());
+        msg.convertAndSend("/topic/lobby/chat-cleared", event);
+        return event;
     }
 
     private ChatMessage buildChatMessage(String nickname, String emoji, StudyMoveRequest request) {
