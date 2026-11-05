@@ -167,6 +167,9 @@ jobs:
           if ([string]::IsNullOrWhiteSpace($env:LOBBY_PASSWORD)) {
               throw "GitHub Actions secret LOBBY_PASSWORD is not configured. Add it before deploying."
           }
+          if ([Security.Principal.WindowsIdentity]::GetCurrent().User.Value -ne 'S-1-5-18') {
+              throw "Backend runner must run as LocalSystem to start the scheduled task."
+          }
 
 
 
@@ -549,172 +552,64 @@ jobs:
       # RUNNER_TRACKING_ID를 비운 뒤 실행
       #
       # ======================================================
-      - name: Start backend
+      - name: Start backend as scheduled task
         shell: powershell
         env:
           LOBBY_PASSWORD: ${{ secrets.LOBBY_PASSWORD }}
         run: |
-
+          $ErrorActionPreference = "Stop"
           $deployPath = "C:\perpur\back"
+          $taskName = "StudyPlatformBackend"
+          $jarPath = Join-Path $deployPath "study-server-0.0.1-SNAPSHOT.jar"
+          $launcher = Join-Path $deployPath "start-backend.ps1"
+          $secretPath = Join-Path $deployPath "lobby-password.secure"
+          $logPath = Join-Path $deployPath "backend-stdout.log"
+          $javaPath = (Get-Command java.exe -ErrorAction Stop).Source
 
-          $jarName = "study-server-0.0.1-SNAPSHOT.jar"
-
-          $jarPath = Join-Path `
-              $deployPath `
-              $jarName
-
-
-          Write-Host "===================================="
-          Write-Host "Starting Backend"
-          Write-Host "JAR : $jarPath"
-          Write-Host "===================================="
-
-
-
-          # --------------------------------------------------
-          # 중요
-          #
-          # GitHub Self-hosted Runner가
-          # javaw 프로세스를 Job 종료 후
-          # 같이 정리하지 않도록 처리
-          # --------------------------------------------------
-          $env:RUNNER_TRACKING_ID = "backend-service"
-
-
-
-          # --------------------------------------------------
-          # javaw.exe 백그라운드 실행
-          # --------------------------------------------------
-          $process = Start-Process `
-              -FilePath "java.exe" `
-              -ArgumentList "-jar `"$jarPath`"" `
-              -WorkingDirectory $deployPath `
-              -RedirectStandardOutput (Join-Path $deployPath "backend-stdout.log") `
-              -RedirectStandardError (Join-Path $deployPath "backend-stderr.log") `
-              -WindowStyle Hidden `
-              -PassThru
-
-
-
-          Write-Host ""
-          Write-Host "Backend process started."
-          Write-Host "PID : $($process.Id)"
-
-
-
-          # --------------------------------------------------
-          # 프로세스가 시작하자마자 죽는지 확인하기 위해
-          # 잠깐 대기
-          # --------------------------------------------------
-          Start-Sleep -Seconds 5
-
-
-
-          $running = Get-Process `
-              -Id $process.Id `
-              -ErrorAction SilentlyContinue
-
-
-          if (!$running) {
-
-              Write-Host "Backend startup logs:"
-              Get-Content (Join-Path $deployPath "backend-stdout.log") -Tail 80 -ErrorAction SilentlyContinue
-              Get-Content (Join-Path $deployPath "backend-stderr.log") -Tail 80 -ErrorAction SilentlyContinue
-              Write-Error "Backend process terminated during startup."
-
-              exit 1
+          # The encrypted password can only be read by this Windows account.
+          # The scheduled task is also run as SYSTEM.
+          $identity = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+          if ($identity -ne 'S-1-5-18') {
+              throw "Backend runner must run as LocalSystem to start the scheduled task."
           }
+          $securePassword = ConvertTo-SecureString $env:LOBBY_PASSWORD -AsPlainText -Force
+          $encryptedPassword = ConvertFrom-SecureString $securePassword
+          [System.IO.File]::WriteAllText($secretPath, $encryptedPassword)
+          & icacls.exe $secretPath /inheritance:r /grant:r '*S-1-5-18:F' '*S-1-5-32-544:F' | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "Failed to protect the backend password file." }
 
+          $script = @'
+          $ErrorActionPreference = "Stop"
+          Set-Location 'C:\perpur\back'
+          $secure = Get-Content -Raw 'C:\perpur\back\lobby-password.secure' | ConvertTo-SecureString
+          $ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+          try { $env:LOBBY_PASSWORD = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr) }
+          finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr) }
+          & '__JAVA_PATH__' -jar 'C:\perpur\back\study-server-0.0.1-SNAPSHOT.jar' *>> 'C:\perpur\back\backend-stdout.log'
+          exit $LASTEXITCODE
+          '@
+          $script = $script.Replace('__JAVA_PATH__', $javaPath.Replace("'", "''"))
+          [System.IO.File]::WriteAllText($launcher, $script, [System.Text.UTF8Encoding]::new($false))
 
-
-          Write-Host "Backend process is still running."
-
-
-
-          # Spring Boot 서비스 포트가 열릴 때까지 최대 약 60초 대기
-          $backendPort = 20124
-
-
-          Write-Host "===================================="
-          Write-Host "Backend Verification"
-          Write-Host "Port : $backendPort"
-          Write-Host "===================================="
-
-
+          $existingTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+          if ($existingTask) { Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue }
+          $action = New-ScheduledTaskAction -Execute 'powershell.exe' `
+              -Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$launcher`"" `
+              -WorkingDirectory $deployPath
+          $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+          $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero)
+          Register-ScheduledTask -TaskName $taskName -Action $action -Principal $principal -Settings $settings -Force | Out-Null
+          Start-ScheduledTask -TaskName $taskName
 
           $success = $false
-
-
-
-          # --------------------------------------------------
-          # 2초 간격 × 30회
-          #
-          # 최대 약 60초 동안
-          # Spring Boot 기동 대기
-          # --------------------------------------------------
           for ($i = 1; $i -le 30; $i++) {
-
-              if (!(Get-Process -Id $process.Id -ErrorAction SilentlyContinue)) {
-                  Write-Host "Backend process exited during startup."
-                  break
-              }
-
-              $connection = Get-NetTCPConnection `
-                  -LocalPort $backendPort `
-                  -State Listen `
-                  -ErrorAction SilentlyContinue
-
-
-              if ($connection) {
-
-                  $success = $true
-
-
-                  Write-Host ""
-                  Write-Host "Backend port is LISTENING."
-
-
-                  # 어떤 PID가 포트를 열고 있는지도 출력
-                  $connection |
-                      Select-Object `
-                          LocalAddress,
-                          LocalPort,
-                          OwningProcess
-
-
-                  break
-              }
-
-
-
-              Write-Host "Waiting for backend... ($i/30)"
-
-
+              $connection = Get-NetTCPConnection -LocalPort 20124 -State Listen -ErrorAction SilentlyContinue
+              if ($connection) { $success = $true; break }
               Start-Sleep -Seconds 2
           }
-
-
-
-          # --------------------------------------------------
-          # 지정 시간 안에 포트가 열리지 않으면
-          # 배포 실패 처리
-          # --------------------------------------------------
           if (!$success) {
-
-              Write-Host ""
-              Write-Host "Backend startup logs:"
-              Get-Content (Join-Path $deployPath "backend-stdout.log") -Tail 100 -ErrorAction SilentlyContinue
-              Get-Content (Join-Path $deployPath "backend-stderr.log") -Tail 100 -ErrorAction SilentlyContinue
-              Write-Error "Backend port $backendPort is not listening."
-
-
-              exit 1
+              Get-ScheduledTaskInfo -TaskName $taskName | Format-List | Out-String | Write-Host
+              Get-Content $logPath -Tail 100 -ErrorAction SilentlyContinue
+              throw "Backend port 20124 is not listening."
           }
-
-
-
-          Write-Host ""
-          Write-Host "===================================="
-          Write-Host "Backend Deploy Success"
-          Write-Host "Port $backendPort is LISTENING"
-          Write-Host "===================================="
+          Write-Host "Backend is listening on port 20124 (Windows scheduled task: $taskName)."
